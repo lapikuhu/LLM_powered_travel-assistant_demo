@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  travel-assistant:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_URL: sqlite:///./data/travel_assistant.db
+      
+      # OpenAI (required)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4
+      MONTHLY_SPEND_CAP_USD: 10.0
+      
+      # OpenTripMap (required)
+      OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY}
+      
+      # RapidAPI (optional)
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      RAPIDAPI_HOTELS_ENABLED: false
+      
+      # Admin credentials
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-default-secret-key-change-in-production}
+      IP_HASH_SALT: ${IP_HASH_SALT:-default-salt-change-in-production}
+      
+      # Settings
+      RATE_LIMIT_PER_DAY: 30
+      API_CACHE_TTL_SECONDS: 3600
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: false
+    volumes:
+      - travel_data:/app/data
+    restart: unless-stopped
+
+  # Optional: PostgreSQL database for production
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: travel_assistant
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    profiles:
+      - postgres  # Only start when using --profile postgres
+
+volumes:
+  travel_data:
+  postgres_data:

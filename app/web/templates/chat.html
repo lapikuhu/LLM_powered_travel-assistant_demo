@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Travel Assistant - Plan Your Trip{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    {% if spend_capped %}
+    <div class="alert alert-warning">
+        ⚠️ Monthly spend limit reached. LLM features are temporarily disabled. 
+        You can still view and export existing itineraries.
+    </div>
+    {% endif %}
+
+    {% if not success %}
+    <div class="alert alert-error">
+        ❌ There was an error processing your request. Please try again.
+    </div>
+    {% endif %}
+
+    <!-- Chat Messages -->
+    <div class="messages" id="messages">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="message {{ message.role }}">
+                <div class="message-content">
+                    <strong>{% if message.role == 'user' %}You{% else %}Assistant{% endif %}:</strong>
+                    <div class="content">{{ message.content | replace('\n', '<br>') | safe }}</div>
+                    <small class="timestamp">{{ message.timestamp }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="welcome-message">
+            <h2>Welcome to your Travel Assistant! ✈️</h2>
+            <p>I'm here to help you plan amazing city trips. Just tell me:</p>
+            <ul>
+                <li>Where you'd like to go</li>
+                <li>When you're traveling</li>
+                <li>Your budget preference (budget/mid/premium)</li>
+            </ul>
+            <p>I'll create a personalized day-by-day itinerary with great places to visit, hotels, and local recommendations!</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if itinerary_id %}
+    <div class="export-section">
+        <h3>🎉 Your itinerary is ready!</h3>
+        <a href="/api/v1/itineraries/{{ itinerary_id }}" class="export-btn" target="_blank">
+            📱 Export as JSON
+        </a>
+        <p><small>Click to download your itinerary data</small></p>
+    </div>
+    {% endif %}
+
+    <!-- Chat Form -->
+    <form method="post" action="/chat" class="chat-form">
+        {% if session_id %}
+        <input type="hidden" name="session_id" value="{{ session_id }}">
+        {% endif %}
+
+        <div class="form-group">
+            <label for="message">Your message:</label>
+            <textarea 
+                name="message" 
+                id="message" 
+                rows="3" 
+                placeholder="Tell me about your travel plans... (e.g., 'I want to visit Athens for 3 days with a mid-range budget')"
+                required
+            ></textarea>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="destination">Destination (optional):</label>
+                <input 
+                    type="text" 
+                    name="destination" 
+                    id="destination" 
+                    placeholder="e.g., Athens, Paris, Rome"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="budget_tier">Budget:</label>
+                <select name="budget_tier" id="budget_tier">
+                    <option value="budget">Budget (under €80/night)</option>
+                    <option value="mid" selected>Mid-range (€80-150/night)</option>
+                    <option value="premium">Premium (€150+/night)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="start_date">Start Date (optional):</label>
+                <input type="date" name="start_date" id="start_date">
+            </div>
+
+            <div class="form-group">
+                <label for="end_date">End Date (optional):</label>
+                <input type="date" name="end_date" id="end_date">
+            </div>
+        </div>
+
+        <button type="submit" class="submit-btn" {% if spend_capped %}disabled{% endif %}>
+            {% if spend_capped %}💸 Budget Limit Reached{% else %}🚀 Send Message{% endif %}
+        </button>
+    </form>
+</div>
+
+<script>
+// Auto-scroll to bottom of messages
+document.addEventListener('DOMContentLoaded', function() {
+    const messages = document.getElementById('messages');
+    if (messages && messages.children.length > 0) {
+        messages.scrollTop = messages.scrollHeight;
+    }
+    
+    // Focus on message input
+    const messageInput = document.getElementById('message');
+    if (messageInput) {
+        messageInput.focus();
+    }
+});
+
+// Form validation
+document.querySelector('.chat-form').addEventListener('submit', function(e) {
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    
+    if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
+        e.preventDefault();
+        alert('End date must be after start date');
+        return false;
+    }
+});
+</script>
+{% endblock %}

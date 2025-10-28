@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Travel Assistant{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h2>📊 Admin Dashboard</h2>
+
+    <!-- Spend Cap Status -->
+    <section class="card">
+        <h3>💰 Monthly Spend Status</h3>
+        <div class="stats-grid">
+            <div class="stat">
+                <label>Monthly Cap:</label>
+                <span class="value">${{ "%.2f"|format(system_info.monthly_cap_usd) }}</span>
+            </div>
+            <div class="stat">
+                <label>Current Spend:</label>
+                <span class="value">${{ "%.2f"|format(monthly_stats.total_cost_usd) }}</span>
+            </div>
+            <div class="stat">
+                <label>Remaining:</label>
+                <span class="value">${{ "%.2f"|format(system_info.monthly_cap_usd - monthly_stats.total_cost_usd) }}</span>
+            </div>
+            <div class="stat">
+                <label>Usage:</label>
+                <span class="value">{{ "%.1f"|format((monthly_stats.total_cost_usd / system_info.monthly_cap_usd) * 100) }}%</span>
+            </div>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress" style="width: {{ (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) * 100 }}%"></div>
+        </div>
+        
+        {% if (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) >= 1.0 %}
+        <div class="alert alert-error">
+            🚨 Monthly spend cap exceeded! LLM calls are blocked.
+        </div>
+        {% elif (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) >= 0.8 %}
+        <div class="alert alert-warning">
+            ⚠️ Warning: 80% of monthly budget used.
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Token Usage -->
+    <section class="card">
+        <h3>🔢 Token Usage ({{ monthly_stats.month }})</h3>
+        <div class="stats-grid">
+            <div class="stat">
+                <label>Total Calls:</label>
+                <span class="value">{{ monthly_stats.total_calls }}</span>
+            </div>
+            <div class="stat">
+                <label>Prompt Tokens:</label>
+                <span class="value">{{ "{:,}"|format(monthly_stats.total_prompt_tokens) }}</span>
+            </div>
+            <div class="stat">
+                <label>Completion Tokens:</label>
+                <span class="value">{{ "{:,}"|format(monthly_stats.total_completion_tokens) }}</span>
+            </div>
+            <div class="stat">
+                <label>Blocked Calls:</label>
+                <span class="value">{{ monthly_stats.blocked_calls }}</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Daily Costs Chart -->
+    <section class="card">
+        <h3>📈 Daily Costs (Last 30 Days)</h3>
+        {% if daily_costs %}
+        <div class="chart-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Cost (USD)</th>
+                        <th>Calls</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in daily_costs[-10:] %}
+                    <tr>
+                        <td>{{ day.date }}</td>
+                        <td>${{ "%.4f"|format(day.cost_usd) }}</td>
+                        <td>{{ day.calls }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No cost data available</p>
+        {% endif %}
+    </section>
+
+    <!-- Cache Statistics -->
+    <section class="card">
+        <h3>🗄️ API Cache Statistics</h3>
+        <div class="stats-grid">
+            <div class="stat">
+                <label>Total Entries:</label>
+                <span class="value">{{ cache_stats.total_entries }}</span>
+            </div>
+            <div class="stat">
+                <label>Cache TTL:</label>
+                <span class="value">{{ system_info.cache_ttl_hours }}h</span>
+            </div>
+        </div>
+        
+        {% if cache_stats.by_provider %}
+        <h4>By Provider:</h4>
+        <div class="provider-stats">
+            {% for provider, count in cache_stats.by_provider.items() %}
+            <div class="provider-stat">
+                <span class="provider">{{ provider }}</span>
+                <span class="count">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Recent LLM Usage -->
+    <section class="card">
+        <h3>📝 Recent LLM Usage</h3>
+        {% if recent_usage %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Model</th>
+                        <th>Tokens In</th>
+                        <th>Tokens Out</th>
+                        <th>Cost (USD)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for usage in recent_usage %}
+                    <tr>
+                        <td>{{ usage.timestamp }}</td>
+                        <td>{{ usage.model }}</td>
+                        <td>{{ usage.tokens_in }}</td>
+                        <td>{{ usage.tokens_out }}</td>
+                        <td>${{ usage.cost_usd }}</td>
+                        <td>
+                            {% if usage.blocked %}
+                            <span class="status blocked">🚫 Blocked</span>
+                            {% else %}
+                            <span class="status success">✅ Success</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No recent usage data</p>
+        {% endif %}
+    </section>
+
+    <!-- System Information -->
+    <section class="card">
+        <h3>⚙️ System Configuration</h3>
+        <div class="config-list">
+            <div class="config-item">
+                <label>OpenAI Model:</label>
+                <span>{{ system_info.openai_model }}</span>
+            </div>
+            <div class="config-item">
+                <label>RapidAPI Hotels:</label>
+                <span>{{ "Enabled" if system_info.rapidapi_enabled else "Disabled (using stub)" }}</span>
+            </div>
+            <div class="config-item">
+                <label>Cache TTL:</label>
+                <span>{{ system_info.cache_ttl_hours }} hours</span>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
