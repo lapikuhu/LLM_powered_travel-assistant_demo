@@ -11,20 +11,20 @@
     </div>
     {% endif %}
 
-    {% if not success %}
+    {% if success is defined and success is sameas false %}
     <div class="alert alert-error">
         ❌ There was an error processing your request. Please try again.
     </div>
     {% endif %}
 
     <!-- Chat Messages -->
-    <div class="messages" id="messages">
+    <div class="messages" id="messages" aria-live="polite" aria-busy="false">
         {% if messages %}
             {% for message in messages %}
             <div class="message {{ message.role }}">
                 <div class="message-content">
                     <strong>{% if message.role == 'user' %}You{% else %}Assistant{% endif %}:</strong>
-                    <div class="content">{{ message.content | replace('\n', '<br>') | safe }}</div>
+                    <div class="content">{{ message.content_html | safe }}</div>
                     <small class="timestamp">{{ message.timestamp }}</small>
                 </div>
             </div>
@@ -126,13 +126,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Form validation
 document.querySelector('.chat-form').addEventListener('submit', function(e) {
+    const form = this;
     const startDate = document.getElementById('start_date').value;
     const endDate = document.getElementById('end_date').value;
     
+    // Basic date validation
     if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
         e.preventDefault();
         alert('End date must be after start date');
         return false;
+    }
+
+    // Show interim system message while waiting for server response
+    try {
+        const messagesEl = document.getElementById('messages');
+        if (messagesEl) {
+            messagesEl.setAttribute('aria-busy', 'true');
+
+            const pending = document.createElement('div');
+            pending.className = 'message system';
+            const now = new Date();
+            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            pending.innerHTML = `
+                <div class="message-content">
+                    <strong>System:</strong>
+                    <div class="content"><span class="spinner" aria-hidden="true"></span> Message received. Working on response...</div>
+                    <small class="timestamp">${time}</small>
+                </div>`;
+            messagesEl.appendChild(pending);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // Disable inputs and show working state on submit button
+        const submitBtn = form.querySelector('.submit-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.dataset.originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Working...';
+        }
+
+        Array.from(form.elements).forEach(el => {
+            if (el !== submitBtn) {
+                el.setAttribute('readonly', 'readonly');
+                el.setAttribute('aria-disabled', 'true');
+            }
+        });
+    } catch (err) {
+        // Swallow any UI-only errors and continue form submission
+        console.warn('Interim message UI failed:', err);
     }
 });
 </script>

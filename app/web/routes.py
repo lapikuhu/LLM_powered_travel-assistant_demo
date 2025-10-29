@@ -25,6 +25,79 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory="app/web/templates")
 
+# Markdown rendering utilities
+try:
+    import markdown as md
+    import bleach
+    # Optional linkify callbacks (vary across bleach versions)
+    try:
+        from bleach.callbacks import nofollow as _nofollow_cb, target_blank as _target_blank_cb
+        def _apply_linkify(text: str) -> str:
+            return bleach.linkify(text, callbacks=[_nofollow_cb, _target_blank_cb])
+    except Exception:
+        # Fallback to plain linkify without extra callbacks
+        def _apply_linkify(text: str) -> str:
+            try:
+                return bleach.linkify(text)
+            except Exception:
+                return text
+
+    def render_markdown(text: str) -> str:
+        """Render Markdown to sanitized HTML suitable for display in chat.
+
+        - Uses Python-Markdown with useful extensions (extra, nl2br).
+        - Sanitizes with Bleach to prevent XSS, allowing only a safe subset of tags/attrs.
+        """
+        if not text:
+            return ""
+
+        # Convert markdown to HTML
+        html = md.markdown(
+            text,
+            extensions=["extra", "sane_lists", "nl2br"],
+            output_format="html5",
+        )
+
+        # Sanitize HTML
+        allowed_tags = [
+            "p",
+            "br",
+            "strong",
+            "em",
+            "ul",
+            "ol",
+            "li",
+            "code",
+            "pre",
+            "a",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "blockquote",
+            "hr",
+        ]
+        allowed_attrs = {"a": ["href", "title", "target", "rel"]}
+
+        cleaned = bleach.clean(
+            html,
+            tags=allowed_tags,
+            attributes=allowed_attrs,
+            strip=True,
+        )
+
+        # Ensure external links are safe: add rel and target if missing
+        # Note: this is a light post-process; for complex needs, use bleach.linkify
+        cleaned = _apply_linkify(cleaned)
+        return cleaned
+
+except Exception:
+    # Fallback: if markdown/bleach not available, return plain text with <br>
+    def render_markdown(text: str) -> str:
+        return (text or "").replace("\n", "<br>")
+
 
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -129,7 +202,9 @@ async def chat(
             "messages": [
                 {
                     "role": msg.role,
-                    "content": msg.content,
+                    # Convert markdown to sanitized HTML for display
+                    "content": msg.content,  # keep raw content for any non-HTML consumers
+                    "content_html": render_markdown(msg.content),  # html only for template rendering
                     "timestamp": msg.created_at.strftime("%H:%M"),
                 }
                 for msg in messages
@@ -146,7 +221,7 @@ async def chat(
         raise
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error: Error in chat endpoint")
 
 
 @router.get("/api/v1/itineraries/{itinerary_id}")
@@ -223,7 +298,7 @@ async def export_itinerary(
         raise
     except Exception as e:
         logger.error(f"Error exporting itinerary {itinerary_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error: Error exporting itinerary")
 
 
 @router.get("/admin", response_class=HTMLResponse)
@@ -281,7 +356,7 @@ async def admin_dashboard(
         
     except Exception as e:
         logger.error(f"Error in admin dashboard: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error: Error in admin dashboard")
 
 
 @router.get("/health")

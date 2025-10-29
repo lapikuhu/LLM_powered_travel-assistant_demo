@@ -1,0 +1,451 @@
+{
+  "meta": {
+    "title": "Travel Assistant Chatbot PoC",
+    "version": "1.0.0",
+    "created_at": "2025-10-20T00:00:00Z",
+    "assumptions": [
+      "Single-region, English-only, EUR per night.",
+      "OpenAI model configured as gpt-5-thinking.",
+      "Anonymous sessions; admin protected by HTTP Basic.",
+      "SQLite in dev; Postgres optional in prod."
+    ],
+    "out_of_scope": [
+      "Payments and bookings",
+      "Flights and transport optimization",
+      "Rich frontend and streaming tokens",
+      "Multi-currency support"
+    ]
+  },
+  "goals": [
+    "Generate and refine a simple city-trip itinerary via chat.",
+    "Integrate OpenTripMap for POIs and a pluggable Hotel provider.",
+    "Keep stack to Python, SQL, JSON with server-rendered HTML only.",
+    "Enforce a $10 monthly LLM spend cap with graceful degradation."
+    ],
+  "success_metrics": [
+    "Itinerary produced in ≤ 3 turns for common cities",
+    "p95 backend API latency (ex-LLM) < 200 ms",
+    "Spend limiter blocks at $10 with clear UI message"
+  ],
+  "personas": [
+    {
+      "name": "Traveler",
+      "goals": ["Quick itinerary", "Relevant POIs and hotels"],
+      "pain_points": ["Overwhelming options", "Time-consuming research"]
+    },
+    {
+      "name": "Admin",
+      "goals": ["Monitor cost and health"],
+      "pain_points": ["Unpredictable spend", "Opaque failures"]
+    }
+  ],
+  "use_cases": [
+    {
+      "id": "UC-1",
+      "title": "Generate itinerary",
+      "primary_actor": "Traveler",
+      "preconditions": ["Home page loads", "OpenTripMap API key configured"],
+      "main_flow": [
+        "Submit destination, dates, tier, optional prompt",
+        "LLM requests POIs and hotels via tools",
+        "System returns day-by-day itinerary"
+      ],
+      "postconditions": ["Itinerary persisted and viewable"]
+    },
+    {
+      "id": "UC-2",
+      "title": "Refine itinerary via chat",
+      "primary_actor": "Traveler",
+      "preconditions": ["Existing itinerary"],
+      "main_flow": [
+        "User asks to replace or reorder items",
+        "LLM emits action; backend updates items",
+        "Assistant confirms updated plan"
+      ],
+      "postconditions": ["Itinerary updated"]
+    },
+    {
+      "id": "UC-3",
+      "title": "Export itinerary JSON",
+      "primary_actor": "Traveler",
+      "preconditions": ["Itinerary exists"],
+      "main_flow": ["Click export link", "Receive JSON"],
+      "postconditions": ["Valid JSON response"]
+    },
+    {
+      "id": "UC-4",
+      "title": "Admin dashboard",
+      "primary_actor": "Admin",
+      "preconditions": ["Valid admin credentials"],
+      "main_flow": ["Open /admin", "View costs, tokens, tool logs"],
+      "postconditions": ["Operational insight available"]
+    }
+  ],
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "statement": "Server-rendered chat with POST form; no JavaScript.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Submitting chat refreshes page with new assistant message", "No JS resources loaded"]
+    },
+    {
+      "id": "FR-2",
+      "statement": "Extract destination, dates, and budget tier from input.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Invalid dates rejected with 400 and inline message", "Tier ∈ {budget, mid, premium}"]
+    },
+    {
+      "id": "FR-3",
+      "statement": "Integrate OpenTripMap wrapper with caching and normalization.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Cache hit ratio visible on admin", "POIs normalized with name, coords, categories"]
+    },
+    {
+      "id": "FR-4",
+      "statement": "HotelProvider interface with default static stub and optional RapidAPI implementation.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Stub returns deterministic hotels per city/tier", "Feature flag enables Rapid provider when key present"]
+    },
+    {
+      "id": "FR-5",
+      "statement": "LLM tool-action protocol for search_pois/search_hotels/finalize_itinerary.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Malformed tool JSON repaired or rejected with fallback", "Final message includes itinerary summary"]
+    },
+    {
+      "id": "FR-6",
+      "statement": "Enforce $10 monthly spend cap with graceful degradation.",
+      "priority": "MUST",
+      "acceptance_criteria": ["Ledger aggregates month by month", "At cap, LLM calls blocked and banner shown"]
+    },
+    {
+      "id": "FR-7",
+      "statement": "Export itinerary as JSON.",
+      "priority": "MUST",
+      "acceptance_criteria": ["GET /api/v1/itineraries/{id} returns schema-valid JSON"]
+    },
+    {
+      "id": "FR-8",
+      "statement": "Admin dashboard via HTTP Basic.",
+      "priority": "MUST",
+      "acceptance_criteria": ["401 on bad creds", "Shows token, cost, recent tool calls and errors"]
+    },
+    {
+      "id": "FR-9",
+      "statement": "IP-based rate limiting.",
+      "priority": "SHOULD",
+      "acceptance_criteria": ["429 on >30 chat posts/day/IP"]
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "performance",
+      "requirements": [
+        {"id": "NFR-1", "statement": "p95 backend latency (ex-LLM) < 200 ms", "metric": "latency_ms_p95 < 200"},
+        {"id": "NFR-2", "statement": "OpenTripMap call p95 < 2 s", "metric": "tool_latency_ms_p95 < 2000"}
+      ]
+    },
+    {
+      "category": "security",
+      "requirements": [
+        {"id": "NFR-3", "statement": "Admin protected with HTTP Basic", "metric": "401 for invalid creds"},
+        {"id": "NFR-4", "statement": "Secrets only via env", "metric": "No secrets in repo or logs"}
+      ]
+    },
+    {
+      "category": "reliability",
+      "requirements": [
+        {"id": "NFR-5", "statement": "Graceful degradation without LLM", "metric": "Heuristic replies available when blocked"}
+      ]
+    },
+    {
+      "category": "usability",
+      "requirements": [
+        {"id": "NFR-6", "statement": "No JavaScript in shipped assets", "metric": "0 JS resources"}
+      ]
+    },
+    {
+      "category": "observability",
+      "requirements": [
+        {"id": "NFR-7", "statement": "Structured logs and basic metrics", "metric": "metrics exposed at /metrics or logs"}
+      ]
+    }
+  ],
+  "domain_model": {
+    "entities": [
+      {"name": "Session", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "created_at", "type": "timestamp", "required": true, "constraints": []},
+        {"name": "ip_hash", "type": "text", "required": true, "constraints": ["indexed"]}
+      ]},
+      {"name": "Message", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "session_id", "type": "uuid", "required": true, "constraints": ["fk Session.id"]},
+        {"name": "role", "type": "text", "required": true, "constraints": ["in(user,assistant,system)"]},
+        {"name": "content", "type": "text", "required": true, "constraints": []},
+        {"name": "tokens_in", "type": "int", "required": false, "constraints": []},
+        {"name": "tokens_out", "type": "int", "required": false, "constraints": []},
+        {"name": "cost_usd", "type": "numeric", "required": false, "constraints": []},
+        {"name": "created_at", "type": "timestamp", "required": true, "constraints": []}
+      ]},
+      {"name": "Itinerary", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "session_id", "type": "uuid", "required": true, "constraints": ["fk Session.id"]},
+        {"name": "city", "type": "text", "required": true, "constraints": []},
+        {"name": "country", "type": "text", "required": false, "constraints": []},
+        {"name": "start_date", "type": "date", "required": true, "constraints": []},
+        {"name": "end_date", "type": "date", "required": true, "constraints": []},
+        {"name": "budget_tier", "type": "text", "required": true, "constraints": ["in(budget,mid,premium)"]},
+        {"name": "created_at", "type": "timestamp", "required": true, "constraints": []}
+      ]},
+      {"name": "ItineraryDay", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "itinerary_id", "type": "uuid", "required": true, "constraints": ["fk Itinerary.id"]},
+        {"name": "day_index", "type": "int", "required": true, "constraints": []},
+        {"name": "date", "type": "date", "required": true, "constraints": []}
+      ]},
+      {"name": "ItineraryItem", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "day_id", "type": "uuid", "required": true, "constraints": ["fk ItineraryDay.id"]},
+        {"name": "item_type", "type": "text", "required": true, "constraints": ["in(poi,hotel,meal,transit)"]},
+        {"name": "ref_place_id", "type": "uuid", "required": false, "constraints": ["fk Place.id"]},
+        {"name": "ref_hotel_id", "type": "uuid", "required": false, "constraints": ["fk Hotel.id"]},
+        {"name": "start_time", "type": "time", "required": false, "constraints": []},
+        {"name": "end_time", "type": "time", "required": false, "constraints": []},
+        {"name": "notes", "type": "text", "required": false, "constraints": []}
+      ]},
+      {"name": "Place", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "provider", "type": "text", "required": true, "constraints": []},
+        {"name": "external_id", "type": "text", "required": true, "constraints": ["unique"]},
+        {"name": "name", "type": "text", "required": true, "constraints": []},
+        {"name": "lat", "type": "real", "required": true, "constraints": []},
+        {"name": "lon", "type": "real", "required": true, "constraints": []},
+        {"name": "categories", "type": "jsonb", "required": false, "constraints": []},
+        {"name": "rating", "type": "real", "required": false, "constraints": []},
+        {"name": "address", "type": "text", "required": false, "constraints": []},
+        {"name": "city", "type": "text", "required": false, "constraints": []},
+        {"name": "country", "type": "text", "required": false, "constraints": []},
+        {"name": "raw_json", "type": "jsonb", "required": false, "constraints": []},
+        {"name": "last_synced_at", "type": "timestamp", "required": false, "constraints": []}
+      ]},
+      {"name": "Hotel", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "provider", "type": "text", "required": true, "constraints": []},
+        {"name": "external_id", "type": "text", "required": false, "constraints": []},
+        {"name": "name", "type": "text", "required": true, "constraints": []},
+        {"name": "lat", "type": "real", "required": false, "constraints": []},
+        {"name": "lon", "type": "real", "required": false, "constraints": []},
+        {"name": "price_eur_per_night", "type": "numeric", "required": false, "constraints": []},
+        {"name": "rating", "type": "real", "required": false, "constraints": []},
+        {"name": "address", "type": "text", "required": false, "constraints": []},
+        {"name": "city", "type": "text", "required": false, "constraints": []},
+        {"name": "country", "type": "text", "required": false, "constraints": []},
+        {"name": "url", "type": "text", "required": false, "constraints": []},
+        {"name": "raw_json", "type": "jsonb", "required": false, "constraints": []},
+        {"name": "last_synced_at", "type": "timestamp", "required": false, "constraints": []}
+      ]},
+      {"name": "APICache", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "provider", "type": "text", "required": true, "constraints": []},
+        {"name": "endpoint", "type": "text", "required": true, "constraints": []},
+        {"name": "params_hash", "type": "text", "required": true, "constraints": ["unique"]},
+        {"name": "response_json", "type": "jsonb", "required": true, "constraints": []},
+        {"name": "fetched_at", "type": "timestamp", "required": true, "constraints": []},
+        {"name": "ttl_seconds", "type": "int", "required": true, "constraints": []}
+      ]},
+      {"name": "LLMLedger", "attributes": [
+        {"name": "id", "type": "uuid", "required": true, "constraints": ["pk"]},
+        {"name": "session_id", "type": "uuid", "required": false, "constraints": ["fk Session.id"]},
+        {"name": "model", "type": "text", "required": true, "constraints": []},
+        {"name": "prompt_tokens", "type": "int", "required": true, "constraints": []},
+        {"name": "completion_tokens", "type": "int", "required": true, "constraints": []},
+        {"name": "cost_usd", "type": "numeric", "required": true, "constraints": []},
+        {"name": "created_at", "type": "timestamp", "required": true, "constraints": []},
+        {"name": "month_key", "type": "text", "required": true, "constraints": []},
+        {"name": "blocked_after", "type": "bool", "required": true, "constraints": []}
+      ]}
+    ],
+    "relationships": [
+      {"from": "Session", "to": "Message", "type": "1:N", "label": "has"},
+      {"from": "Session", "to": "Itinerary", "type": "1:N", "label": "creates"},
+      {"from": "Itinerary", "to": "ItineraryDay", "type": "1:N", "label": "has"},
+      {"from": "ItineraryDay", "to": "ItineraryItem", "type": "1:N", "label": "contains"},
+      {"from": "ItineraryItem", "to": "Place", "type": "1:1", "label": "refers_to"},
+      {"from": "ItineraryItem", "to": "Hotel", "type": "1:1", "label": "refers_to"}
+    ]
+  },
+  "architecture": {
+    "components": [
+      {"name": "Web Backend", "type": "backend", "responsibilities": ["Routes, forms, templates"], "tech_stack": ["FastAPI", "Jinja2"]},
+      {"name": "LLM Orchestrator", "type": "backend", "responsibilities": ["Prompting, tool-actions, spend cap"], "tech_stack": ["httpx"]},
+      {"name": "OpenTripMap Wrapper", "type": "backend", "responsibilities": ["Fetch and normalize POIs", "Cache"], "tech_stack": ["httpx"]},
+      {"name": "Hotel Provider", "type": "backend", "responsibilities": ["Stub or RapidAPI hotel search"], "tech_stack": ["httpx"]},
+      {"name": "DB", "type": "db", "responsibilities": ["Persistence"], "tech_stack": ["SQLite/Postgres", "SQLAlchemy", "Alembic"]}
+    ],
+    "data_flows": [
+      {"from": "Web Backend", "to": "LLM Orchestrator", "via": "HTTP", "payload": "chat request"},
+      {"from": "LLM Orchestrator", "to": "OpenTripMap Wrapper", "via": "HTTP", "payload": "places query"},
+      {"from": "LLM Orchestrator", "to": "Hotel Provider", "via": "HTTP", "payload": "hotel query"},
+      {"from": "Web Backend", "to": "DB", "via": "DB", "payload": "sessions, messages, itinerary"}
+    ],
+    "deployment": {"environments": ["dev", "staging", "prod"], "containerized": true, "ci_cd": "build+test via GitHub Actions or similar"}
+  },
+  "interfaces": {
+    "apis": [
+      {"name": "Chat Page", "method": "POST", "path": "/chat", "auth": "public", "request": "{destination, start_date, end_date, tier, prompt}", "response": "HTML page", "errors": ["400 validation", "402 cap", "503 upstream"]},
+      {"name": "Export Itinerary", "method": "GET", "path": "/api/v1/itineraries/{id}", "auth": "public", "request": "none", "response": "{id, city, days, items...}", "errors": ["404 not found"]},
+      {"name": "Admin", "method": "GET", "path": "/admin", "auth": "admin", "request": "Basic Auth", "response": "HTML", "errors": ["401 unauthorized"]}
+    ],
+    "events": []
+  },
+  "data_storage": {
+    "schemas": [
+      {"table": "sessions", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "created_at", "type": "timestamp", "pk": false, "nullable": false, "index": false},
+        {"name": "ip_hash", "type": "text", "pk": false, "nullable": false, "index": true}
+      ], "indexes": ["idx_sessions_ip_hash"], "retention": "7 days"},
+      {"table": "messages", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "session_id", "type": "uuid", "pk": false, "nullable": false, "index": true},
+        {"name": "role", "type": "text", "pk": false, "nullable": false, "index": false},
+        {"name": "content", "type": "text", "pk": false, "nullable": false, "index": false},
+        {"name": "tokens_in", "type": "int", "pk": false, "nullable": true, "index": false},
+        {"name": "tokens_out", "type": "int", "pk": false, "nullable": true, "index": false},
+        {"name": "cost_usd", "type": "numeric", "pk": false, "nullable": true, "index": false},
+        {"name": "created_at", "type": "timestamp", "pk": false, "nullable": false, "index": true}
+      ], "indexes": ["idx_messages_session_created"], "retention": "7 days"},
+      {"table": "itineraries", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "session_id", "type": "uuid", "pk": false, "nullable": false, "index": true},
+        {"name": "city", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "country", "type": "text", "pk": false, "nullable": true, "index": false},
+        {"name": "start_date", "type": "date", "pk": false, "nullable": false, "index": false},
+        {"name": "end_date", "type": "date", "pk": false, "nullable": false, "index": false},
+        {"name": "budget_tier", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "created_at", "type": "timestamp", "pk": false, "nullable": false, "index": false}
+      ], "indexes": ["idx_itineraries_city", "idx_itineraries_session"], "retention": "30 days"},
+      {"table": "itinerary_days", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "itinerary_id", "type": "uuid", "pk": false, "nullable": false, "index": true},
+        {"name": "day_index", "type": "int", "pk": false, "nullable": false, "index": false},
+        {"name": "date", "type": "date", "pk": false, "nullable": false, "index": false}
+      ], "indexes": ["idx_days_itinerary"], "retention": "30 days"},
+      {"table": "itinerary_items", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "day_id", "type": "uuid", "pk": false, "nullable": false, "index": true},
+        {"name": "item_type", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "ref_place_id", "type": "uuid", "pk": false, "nullable": true, "index": true},
+        {"name": "ref_hotel_id", "type": "uuid", "pk": false, "nullable": true, "index": true},
+        {"name": "start_time", "type": "time", "pk": false, "nullable": true, "index": false},
+        {"name": "end_time", "type": "time", "pk": false, "nullable": true, "index": false},
+        {"name": "notes", "type": "text", "pk": false, "nullable": true, "index": false}
+      ], "indexes": ["idx_items_day", "idx_items_type"], "retention": "30 days"},
+      {"table": "places", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "provider", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "external_id", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "name", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "lat", "type": "real", "pk": false, "nullable": false, "index": false},
+        {"name": "lon", "type": "real", "pk": false, "nullable": false, "index": false},
+        {"name": "categories", "type": "jsonb", "pk": false, "nullable": true, "index": false},
+        {"name": "rating", "type": "real", "pk": false, "nullable": true, "index": false},
+        {"name": "address", "type": "text", "pk": false, "nullable": true, "index": false},
+        {"name": "city", "type": "text", "pk": false, "nullable": true, "index": true},
+        {"name": "country", "type": "text", "pk": false, "nullable": true, "index": true},
+        {"name": "raw_json", "type": "jsonb", "pk": false, "nullable": true, "index": false},
+        {"name": "last_synced_at", "type": "timestamp", "pk": false, "nullable": true, "index": false}
+      ], "indexes": ["idx_places_provider_ext", "idx_places_city_country"], "retention": "30 days"},
+      {"table": "hotels", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "provider", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "external_id", "type": "text", "pk": false, "nullable": true, "index": true},
+        {"name": "name", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "lat", "type": "real", "pk": false, "nullable": true, "index": false},
+        {"name": "lon", "type": "real", "pk": false, "nullable": true, "index": false},
+        {"name": "price_eur_per_night", "type": "numeric", "pk": false, "nullable": true, "index": true},
+        {"name": "rating", "type": "real", "pk": false, "nullable": true, "index": true},
+        {"name": "address", "type": "text", "pk": false, "nullable": true, "index": false},
+        {"name": "city", "type": "text", "pk": false, "nullable": true, "index": true},
+        {"name": "country", "type": "text", "pk": false, "nullable": true, "index": true},
+        {"name": "url", "type": "text", "pk": false, "nullable": true, "index": false},
+        {"name": "raw_json", "type": "jsonb", "pk": false, "nullable": true, "index": false},
+        {"name": "last_synced_at", "type": "timestamp", "pk": false, "nullable": true, "index": false}
+      ], "indexes": ["idx_hotels_city_price", "idx_hotels_rating"], "retention": "30 days"},
+      {"table": "api_cache", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "provider", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "endpoint", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "params_hash", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "response_json", "type": "jsonb", "pk": false, "nullable": false, "index": false},
+        {"name": "fetched_at", "type": "timestamp", "pk": false, "nullable": false, "index": true},
+        {"name": "ttl_seconds", "type": "int", "pk": false, "nullable": false, "index": false}
+      ], "indexes": ["idx_cache_params_hash"], "retention": "24 hours"},
+      {"table": "llm_ledger", "columns": [
+        {"name": "id", "type": "uuid", "pk": true, "nullable": false, "index": false},
+        {"name": "session_id", "type": "uuid", "pk": false, "nullable": true, "index": true},
+        {"name": "model", "type": "text", "pk": false, "nullable": false, "index": false},
+        {"name": "prompt_tokens", "type": "int", "pk": false, "nullable": false, "index": false},
+        {"name": "completion_tokens", "type": "int", "pk": false, "nullable": false, "index": false},
+        {"name": "cost_usd", "type": "numeric", "pk": false, "nullable": false, "index": false},
+        {"name": "created_at", "type": "timestamp", "pk": false, "nullable": false, "index": true},
+        {"name": "month_key", "type": "text", "pk": false, "nullable": false, "index": true},
+        {"name": "blocked_after", "type": "bool", "pk": false, "nullable": false, "index": false}
+      ], "indexes": ["idx_ledger_month", "idx_ledger_session"], "retention": "30 days"}
+    ]
+  },
+  "security": {
+    "authn": "Public sessions; Admin via HTTP Basic with env credentials",
+    "authz": "Admin-only access to /admin",
+    "data_protection": ["Env-only secrets", "Redacted logs", "IP hashed with salt"],
+    "audit_logging": ["LLM usage and tool calls recorded with timestamps and durations"]
+  },
+  "telemetry": {
+    "metrics": ["requests_total", "request_latency_ms", "tool_call_latency_ms", "openai_tokens_in", "openai_tokens_out", "cost_usd_total", "cache_hit_ratio"],
+    "logs": ["structured JSON per request with trace_id"],
+    "alerts": ["cap_80_percent_reached", "cap_100_percent_reached"]
+  },
+  "test_plan": {
+    "unit": ["Cost estimator math", "Action parser repairs malformed JSON", "OpenTripMap normalization", "Hotel stub price tiers"],
+    "integration": ["Chat → Orchestrator → Tool → Final message", "DB migrations applied", "Admin auth"],
+    "e2e": ["Athens 3-day happy path", "Cap exceeded path"],
+    "performance": ["p95 backend latency ex-LLM under target"],
+    "security": ["Admin requires auth", "No secrets in logs", "Rate limiter triggers"]
+  },
+  "risks": [
+    {"id": "R-1", "description": "Malformed tool JSON from LLM", "mitigation": "Repair + fallback"},
+    {"id": "R-2", "description": "Provider rate limits/timeouts", "mitigation": "Caching, retries, backoff"},
+    {"id": "R-3", "description": "Spend estimate off vs billing", "mitigation": "Configurable prices + safety margin"},
+    {"id": "R-4", "description": "No JS UX limits", "mitigation": "Concise responses; clear exports"},
+    {"id": "R-5", "description": "Hotel API instability", "mitigation": "Stub default + interface abstraction"}
+  ],
+  "delivery_plan": [
+    {
+      "milestone": "Scaffold & Storage",
+      "scope": ["FastAPI, Jinja2, SQLite, Alembic", "Entities & migrations"],
+      "exit_criteria": ["Server runs; DB migrates; / loads"]
+    },
+    {
+      "milestone": "Wrappers",
+      "scope": ["OpenTripMap wrapper + cache", "HotelProvider stub + optional Rapid"],
+      "exit_criteria": ["Tool calls return normalized data"]
+    },
+    {
+      "milestone": "Orchestrator & Cap",
+      "scope": ["LLM prompts", "Action loop", "Spend cap"],
+      "exit_criteria": ["Chat produces itinerary; cap enforced"]
+    },
+    {
+      "milestone": "Admin & Export",
+      "scope": ["/admin dashboard", "Itinerary JSON export"],
+      "exit_criteria": ["AC-1..AC-6 pass"]
+    }
+  ],
+  "copilot_guide": {
+    "coding_standards": ["Python 3.11", "type hints", "ruff/black", "pytest ≥ 80% core coverage"],
+    "prompting_instructions": ["Use provided tool-action schema", "Prefer deterministic stubs when capped", "Keep responses concise and structured"],
+    "constraints": ["No JavaScript", "Env-only secrets", "p95 targets", "EUR/night tiers"],
+    "prohibited_content": ["Streaming tokens", "Client-side JS", "Hardcoded API keys or secrets"]
+  }
+}
