@@ -33,14 +33,21 @@ class RapidAPIHotelProvider(HotelProvider):
             }
         )
     
-    async def search_hotels(
-        self,
-        city: str,
-        country: Optional[str] = None,
-        budget_tier: str = "mid",
-        limit: int = 20,
-    ) -> List[Dict[str, Any]]:
-        """Search for hotels using RapidAPI."""
+    async def search_hotels(self,
+                            city: str,
+                            country: Optional[str] = None,
+                            budget_tier: str = "mid",
+                            limit: int = 20,
+                        ) -> List[Dict[str, Any]]:
+        """Search for hotels using RapidAPI.
+        Args:
+            city (str): City name.
+            country (Optional[str]): Country name.
+            budget_tier (str): Budget tier ("budget", "mid", "premium").
+            limit (int): Maximum number of hotels to return.
+        Returns:
+            List[Dict[str, Any]]: List of normalized hotel data.
+        """
         if not self.api_key:
             logger.warning("RapidAPI key not configured, falling back to empty results")
             return []
@@ -69,7 +76,13 @@ class RapidAPIHotelProvider(HotelProvider):
         return self._normalize_hotels(hotels_data, city, country)
     
     async def _search_location(self, city: str, country: Optional[str]) -> Optional[Dict[str, Any]]:
-        """Search for location to get destination ID."""
+        """Search for location to get destination ID.
+        Args:
+            city (str): City name.
+            country (Optional[str]): Country name.
+        Returns:
+            Optional[Dict[str, Any]]: Location data or None if not found.
+        """
         search_query = city
         if country:
             search_query = f"{city}, {country}"
@@ -119,14 +132,21 @@ class RapidAPIHotelProvider(HotelProvider):
             logger.error(f"Unexpected error in location search: {e}")
             return None
     
-    async def _search_hotels_by_destination(
-        self,
-        dest_id: str,
-        city: str,
-        budget_tier: str,
-        limit: int
-    ) -> List[Dict[str, Any]]:
-        """Search hotels by destination ID."""
+    async def _search_hotels_by_destination(self,
+                                            dest_id: str,
+                                            city: str,
+                                            budget_tier: str,
+                                            limit: int
+                                        ) -> List[Dict[str, Any]]:
+        """Search hotels by destination ID.
+        Args:
+            dest_id (str): Destination identifier.
+            city (str): City name.
+            budget_tier (str): Budget tier ("budget", "mid", "premium").
+            limit (int): Maximum number of hotels to return.
+        Returns:
+            List[Dict[str, Any]]: List of hotel data.
+        """
         
         # Convert budget tier to price range
         price_filters = self._get_price_filters(budget_tier)
@@ -180,7 +200,12 @@ class RapidAPIHotelProvider(HotelProvider):
             return []
     
     def _get_price_filters(self, budget_tier: str) -> Dict[str, Any]:
-        """Get price filter parameters based on budget tier."""
+        """Get price filter parameters based on budget tier.
+        Args:
+            budget_tier (str): Budget tier ("budget", "mid", "premium").
+        Returns:
+            Dict[str, Any]: Price filter parameters.
+        """
         if budget_tier == "budget":
             return {"price_filter_currencycode": "EUR", "price_filter_max": "80"}
         elif budget_tier == "premium":
@@ -192,13 +217,19 @@ class RapidAPIHotelProvider(HotelProvider):
                 "price_filter_max": "150"
             }
     
-    def _normalize_hotels(
-        self,
-        hotels_data: List[Dict[str, Any]],
-        city: str,
-        country: Optional[str]
-    ) -> List[Dict[str, Any]]:
-        """Normalize hotel data from RapidAPI response."""
+    def _normalize_hotels(self,
+                        hotels_data: List[Dict[str, Any]],
+                        city: str,
+                        country: Optional[str]
+                    ) -> List[Dict[str, Any]]:
+        """Normalize hotel data from RapidAPI response.
+        Args:
+            hotels_data (List[Dict[str, Any]]): Raw hotel data from RapidAPI.
+            city (str): City name.
+            country (Optional[str]): Country name.
+        Returns:
+            List[Dict[str, Any]]: List of normalized hotel data.
+        """
         normalized = []
         
         for hotel in hotels_data:

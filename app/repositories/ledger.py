@@ -14,16 +14,25 @@ class LedgerRepository:
     def __init__(self, db: DBSession):
         self.db = db
     
-    def record_usage(
-        self,
-        session_id: Optional[str],
-        model: str,
-        prompt_tokens: int,
-        completion_tokens: int,
-        cost_usd: float,
-        blocked_after: bool = False,
-    ) -> LLMLedger:
-        """Record LLM usage."""
+    def record_usage(self,
+                    session_id: Optional[str],
+                    model: str,
+                    prompt_tokens: int,
+                    completion_tokens: int,
+                    cost_usd: float,
+                    blocked_after: bool = False,
+                ) -> LLMLedger:
+        """Record LLM usage.
+        Args:
+            session_id (Optional[str]): Session identifier.
+            model (str): Model name.
+            prompt_tokens (int): Number of prompt tokens.
+            completion_tokens (int): Number of completion tokens.
+            cost_usd (float): Cost in USD.
+            blocked_after (bool): Whether the usage was blocked after.
+        Returns:
+            LLMLedger: Created ledger entry.
+        """
         now = datetime.utcnow()
         month_key = now.strftime("%Y-%m")
         
@@ -44,7 +53,12 @@ class LedgerRepository:
         return ledger_entry
     
     def get_monthly_spend(self, month_key: Optional[str] = None) -> float:
-        """Get total spend for a month. Defaults to current month."""
+        """Get total spend for a month. Defaults to current month.
+        Args:
+            month_key (Optional[str]): Month in 'YYYY-MM' format. Defaults to current month.
+        Returns:
+            float: Total spend for the month.
+        """
         if month_key is None:
             month_key = datetime.utcnow().strftime("%Y-%m")
         
@@ -57,12 +71,23 @@ class LedgerRepository:
         return result or 0.0
     
     def is_spend_cap_exceeded(self, cap_usd: float, month_key: Optional[str] = None) -> bool:
-        """Check if monthly spend cap is exceeded."""
+        """Check if monthly spend cap is exceeded.
+        Args:
+            cap_usd (float): Spend cap in USD.
+            month_key (Optional[str]): Month in 'YYYY-MM' format. Defaults to current month.
+        Returns:
+            bool: True if spend cap is exceeded, False otherwise.
+        """
         monthly_spend = self.get_monthly_spend(month_key)
         return monthly_spend >= cap_usd
     
     def get_monthly_stats(self, month_key: Optional[str] = None) -> Dict[str, Any]:
-        """Get comprehensive monthly statistics."""
+        """Get comprehensive monthly statistics.
+        Args:
+            month_key (Optional[str]): Month in 'YYYY-MM' format. Defaults to current month.
+        Returns:
+            Dict[str, Any]: Monthly statistics including total cost, tokens, calls, and blocked calls
+        """
         if month_key is None:
             month_key = datetime.utcnow().strftime("%Y-%m")
         
@@ -98,7 +123,12 @@ class LedgerRepository:
         }
     
     def get_recent_usage(self, limit: int = 50) -> List[LLMLedger]:
-        """Get recent LLM usage entries."""
+        """Get recent LLM usage entries.
+        Args:
+            limit (int): Number of recent entries to retrieve.
+        Returns:
+            List[LLMLedger]: List of recent ledger entries.
+        """
         return (
             self.db.query(LLMLedger)
             .order_by(desc(LLMLedger.created_at))
@@ -107,7 +137,12 @@ class LedgerRepository:
         )
     
     def get_usage_by_session(self, session_id: str) -> List[LLMLedger]:
-        """Get all LLM usage for a session."""
+        """Get all LLM usage for a session.
+        Args:
+            session_id (str): Session identifier.
+        Returns:
+            List[LLMLedger]: List of ledger entries for the session.
+        """
         return (
             self.db.query(LLMLedger)
             .filter(LLMLedger.session_id == session_id)
@@ -116,7 +151,12 @@ class LedgerRepository:
         )
     
     def get_daily_costs(self, days: int = 30) -> List[Dict[str, Any]]:
-        """Get daily cost breakdown for the last N days."""
+        """Get daily cost breakdown for the last N days.
+        Args:
+            days (int): Number of days to look back.
+        Returns:
+            List[Dict[str, Any]]: List of daily cost summaries.
+        """
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
         results = (

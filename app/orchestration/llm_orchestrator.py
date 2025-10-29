@@ -532,7 +532,13 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
         )
     
     async def _search_hotels_action(self, args: Dict[str, Any]) -> ActionResult:
-        """Execute search_hotels action."""
+        """Execute search_hotels action.
+        Basic, no-fallback hotel search.
+        Args:
+            args (Dict[str, Any]): Action arguments.
+        Returns:
+            ActionResult: The result of the hotel search.
+        """
         city = args.get("city", "")
         country = args.get("country")
         budget_tier = args.get("budget_tier", "mid")
@@ -564,7 +570,13 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
         )
     
     async def _finalize_itinerary_action(self, args: Dict[str, Any], session_id: str) -> ActionResult:
-        """Execute finalize_itinerary action."""
+        """Execute finalize_itinerary action.
+        Args:
+            args (Dict[str, Any]): Action arguments.
+            session_id (str): User session ID.
+        Returns:
+            ActionResult: The result of the itinerary finalization.
+        """
         try:
             # Extract itinerary data
             city = args.get("city", "")
@@ -645,9 +657,15 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             )
     
     def _get_city_coordinates(self, city: str, country: Optional[str]) -> Optional[Dict[str, float]]:
-        """Get approximate coordinates for a city."""
-        # Simplified city coordinate lookup
-        # In production, you'd use a proper geocoding service
+        """Get approximate coordinates for a city.
+        Args:
+            city (str): City name.
+            country (Optional[str]): Country name.
+        Returns:
+            Optional[Dict[str, float]]: Dictionary with 'lat' and 'lon' or None.
+        """
+        # Simplified city coordinate lookup for demo only
+        # TODO: Integrate with a geocoding API for real data
         city_coords = {
             "athens": {"lat": 37.9755, "lon": 23.7348},
             "paris": {"lat": 48.8566, "lon": 2.3522},
@@ -695,7 +713,14 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
         return " ".join(summaries) + " I'm ready to create a detailed itinerary."
     
     def _generate_tool_response(self, results: List[ActionResult]) -> str:
-        """Generate response content based on tool results."""
+        """Generate response content based on tool results.
+        Basic, fallback only for POI search failures.
+        TODO: Expand fallback handling for hotels.
+        Args:
+            results (List[ActionResult]): List of action results.
+        Returns:
+            str: Response content for the user.
+        """
         if not results:
             return "I couldn't execute the requested actions. Please try again."
         

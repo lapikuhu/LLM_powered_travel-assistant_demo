@@ -1,4 +1,6 @@
-"""Seed script to initialize stub hotel data."""
+"""Seed script to initialize stub hotel data.
+Used for testing and development.
+"""
 
 import sys
 import os

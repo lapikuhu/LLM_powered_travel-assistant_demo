@@ -1,4 +1,7 @@
-"""SQLAlchemy database models."""
+"""SQLAlchemy database models.
+Defines the database schema for sessions, messages, itineraries,
+places, hotels, and LLM usage ledger.
+"""
 
 import uuid
 from datetime import datetime, date, time
@@ -68,7 +71,16 @@ class JSONColumn(TypeDecorator):
 
 
 class Session(Base):
-    """User session model."""
+    """User session model.
+    Represents a user session in the application. Inherits from Base.
+    Columns:
+        id (UUID): Primary key.
+        created_at (DateTime): Timestamp of session creation.
+        ip_hash (String): Hashed IP address for basic identification.
+    Relationships:
+        messages (List[Message]): Chat messages in this session.
+        itineraries (List[Itinerary]): Itineraries created in this session.
+    """
     __tablename__ = "sessions"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -85,7 +97,21 @@ class Session(Base):
 
 
 class Message(Base):
-    """Chat message model."""
+    """Chat message model.
+    Represents a chat message in the application. Inherits from Base.
+    Columns:
+        id (UUID): Primary key.
+        session_id (UUID): Foreign key to Session.
+        role (String): Role of the message sender (user, assistant, system).
+        content (Text): Message content.
+        tokens_in (Integer): Number of input tokens.
+        tokens_out (Integer): Number of output tokens.
+        cost_usd (Float): Cost incurred for this message.
+        created_at (DateTime): Timestamp of message creation.
+    Relationships:
+        session (Session): The session this message belongs to.
+        itinerary (Itinerary): The itinerary this message is related to.
+    """
     __tablename__ = "messages"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -107,7 +133,21 @@ class Message(Base):
 
 
 class Itinerary(Base):
-    """Travel itinerary model."""
+    """Travel itinerary model.
+    Represents a travel itinerary in the application. Inherits from Base.
+    Columns:
+        id (UUID): Primary key.
+        session_id (UUID): Foreign key to Session.
+        city (String): Destination city.
+        country (String): Destination country.
+        start_date (Date): Start date of the itinerary.
+        end_date (Date): End date of the itinerary.
+        budget_tier (String): Budget tier (budget, mid, premium).
+        created_at (DateTime): Timestamp of itinerary creation.
+        Relationships:
+        session (Session): The session this itinerary belongs to.
+        days (List[ItineraryDay]): Days included in this itinerary.
+        """
     __tablename__ = "itineraries"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -131,7 +171,17 @@ class Itinerary(Base):
 
 
 class ItineraryDay(Base):
-    """Individual day within an itinerary."""
+    """Individual day within an itinerary.
+    Represents a single day in a travel itinerary.
+    Columns:
+        id (UUID): Primary key.
+        itinerary_id (UUID): Foreign key to Itinerary.
+        day_index (Integer): Index of the day in the itinerary.
+        date (Date): Date of this day.
+    Relationships:
+        itinerary (Itinerary): The itinerary this day belongs to.
+        items (List[ItineraryItem]): Items/activities planned for this day.
+    """
     __tablename__ = "itinerary_days"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -150,7 +200,22 @@ class ItineraryDay(Base):
 
 
 class ItineraryItem(Base):
-    """Individual item/activity within a day."""
+    """Individual item/activity within a day.
+    Represents a single activity or item planned for a specific day in the itinerary.
+    Columns:
+        id (UUID): Primary key.
+        day_id (UUID): Foreign key to ItineraryDay.
+        item_type (String): Type of item (poi, hotel, meal, transit).
+        ref_place_id (UUID): Foreign key to Place (if applicable).
+        ref_hotel_id (UUID): Foreign key to Hotel (if applicable).
+        start_time (Time): Start time of the activity.
+        end_time (Time): End time of the activity.
+        notes (Text): Additional notes for the item.
+    Relationships:
+        day (ItineraryDay): The day this item belongs to.
+        place (Place): The place referenced by this item (if applicable).
+        hotel (Hotel): The hotel referenced by this item (if applicable).
+    """
     __tablename__ = "itinerary_items"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -175,7 +240,25 @@ class ItineraryItem(Base):
 
 
 class Place(Base):
-    """Points of interest and locations."""
+    """Points of interest and locations.
+    Represents a place of interest in the application.
+    Columns:
+        id (UUID): Primary key.
+        provider (String): Data provider name.
+        external_id (String): External ID from the provider.
+        name (String): Name of the place.
+        lat (Float): Latitude coordinate.
+        lon (Float): Longitude coordinate.
+        categories (JSON): Categories/tags for the place.
+        rating (Float): Average rating of the place.
+        address (Text): Address of the place.
+        city (String): City where the place is located.
+        country (String): Country where the place is located.
+        raw_json (JSON): Raw JSON data from the provider.
+        last_synced_at (DateTime): Timestamp of last data sync.
+    Relationships:
+        None.
+        """
     __tablename__ = "places"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -200,7 +283,26 @@ class Place(Base):
 
 
 class Hotel(Base):
-    """Hotel accommodations."""
+    """Hotel accommodations.
+    Represents a hotel in the application.
+    Args:
+        id (UUID): Primary key.
+        provider (String): Data provider name.
+        external_id (String): External ID from the provider.
+        name (String): Name of the hotel.
+        lat (Float): Latitude coordinate.
+        lon (Float): Longitude coordinate.
+        price_eur_per_night (Float): Price per night in EUR.
+        rating (Float): Average rating of the hotel.
+        address (Text): Address of the hotel.
+        city (String): City where the hotel is located.
+        country (String): Country where the hotel is located.
+        url (Text): URL to the hotel's webpage.
+        raw_json (JSON): Raw JSON data from the provider.
+        last_synced_at (DateTime): Timestamp of last data sync.
+    Relationships:
+        None.
+    """
     __tablename__ = "hotels"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -225,7 +327,19 @@ class Hotel(Base):
 
 
 class APICache(Base):
-    """Cache for external API responses."""
+    """Cache for external API responses.
+    Simple caching mechanism to store API responses and reduce redundant calls.
+    Columns:
+        id (UUID): Primary key.
+        provider (String): Data provider name.
+        endpoint (String): API endpoint URL.
+        params_hash (String): Hash of the request parameters.
+        response_json (JSON): Cached API response.
+        fetched_at (DateTime): Timestamp when the data was fetched.
+        ttl_seconds (Integer): Time-to-live in seconds.
+    Relationships:
+        None.
+    """
     __tablename__ = "api_cache"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
@@ -243,7 +357,20 @@ class APICache(Base):
 
 
 class LLMLedger(Base):
-    """LLM usage tracking for spend cap enforcement."""
+    """LLM usage tracking for spend cap enforcement.
+    Columns:
+        id (UUID): Primary key.
+        session_id (UUID): Foreign key to Session.
+        model (String): LLM model name.
+        prompt_tokens (Integer): Number of prompt tokens used.
+        completion_tokens (Integer): Number of completion tokens used.
+        cost_usd (Float): Cost incurred for this LLM call.
+        created_at (DateTime): Timestamp of the LLM call.
+        month_key (String): Month key in YYYY-MM format for aggregation.
+        blocked_after (Boolean): Whether this call was blocked due to spend cap.
+    Relationships:
+        session (Session): The session this LLM call belongs to.
+    """
     __tablename__ = "llm_ledger"
     
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)

@@ -194,14 +194,21 @@ class StaticStubHotelProvider(HotelProvider):
                 self.hotel_repo.create_or_update_hotel(**hotel_data)
                 logger.info(f"Created stub hotel: {hotel_data['name']} in {hotel_data['city']}")
     
-    async def search_hotels(
-        self,
-        city: str,
-        country: Optional[str] = None,
-        budget_tier: str = "mid",
-        limit: int = 20,
-    ) -> List[Dict[str, Any]]:
-        """Search for hotels using the stub data."""
+    async def search_hotels(self,
+                            city: str,
+                            country: Optional[str] = None,
+                            budget_tier: str = "mid",
+                            limit: int = 20,
+                        ) -> List[Dict[str, Any]]:
+        """Search for hotels using the stub data.
+        Args:
+            city (str): City name.
+            country (Optional[str]): Country name.
+            budget_tier (str): Budget tier ("budget", "mid", "premium").
+            limit (int): Maximum number of hotels to return.
+        Returns:
+            List[Dict[str, Any]]: List of normalized hotel data.
+        """
         logger.info(f"Searching stub hotels for {city}, tier: {budget_tier}")
         
         # Get hotels from database
@@ -233,5 +240,10 @@ class StaticStubHotelProvider(HotelProvider):
         return normalized_hotels
     
     def get_provider_name(self) -> str:
-        """Get the provider name."""
+        """Get the provider name.
+        Args:
+            None
+        Returns:
+            str: Provider name.
+        """
         return "stub"

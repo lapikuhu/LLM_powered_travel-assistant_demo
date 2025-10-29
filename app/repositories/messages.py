@@ -13,16 +13,25 @@ class MessageRepository:
     def __init__(self, db: DBSession):
         self.db = db
     
-    def create_message(
-        self,
-        session_id: str,
-        role: str,
-        content: str,
-        tokens_in: Optional[int] = None,
-        tokens_out: Optional[int] = None,
-        cost_usd: Optional[float] = None,
-    ) -> Message:
-        """Create a new message."""
+    def create_message(self,
+                        session_id: str,
+                        role: str,
+                        content: str,
+                        tokens_in: Optional[int] = None,
+                        tokens_out: Optional[int] = None,
+                        cost_usd: Optional[float] = None,
+                    ) -> Message:
+        """Create a new message.
+        Args:
+            session_id (str): Session identifier.
+            role (str): Role of the message sender (e.g., 'user', 'assistant').
+            content (str): Message content.
+            tokens_in (Optional[int]): Number of input tokens.
+            tokens_out (Optional[int]): Number of output tokens.
+            cost_usd (Optional[float]): Cost in USD for this message.
+        Returns:
+            Message: Created message object.
+        """
         message = Message(
             session_id=session_id,
             role=role,
@@ -37,7 +46,12 @@ class MessageRepository:
         return message
     
     def get_messages_by_session(self, session_id: str) -> List[Message]:
-        """Get all messages for a session ordered by creation time."""
+        """Get all messages for a session ordered by creation time.
+        Args:
+            session_id (str): Session identifier.
+        Returns:
+            List[Message]: List of messages for the session.
+        """
         return (
             self.db.query(Message)
             .filter(Message.session_id == session_id)
@@ -46,11 +60,22 @@ class MessageRepository:
         )
     
     def get_message(self, message_id: str) -> Optional[Message]:
-        """Get message by ID."""
+        """Get message by ID.
+        Args:
+            message_id (str): Message identifier.
+        Returns:
+            Optional[Message]: Message object or None if not found.
+        """
         return self.db.query(Message).filter(Message.id == message_id).first()
     
     def get_recent_messages(self, session_id: str, limit: int = 10) -> List[Message]:
-        """Get recent messages for a session."""
+        """Get recent messages for a session.
+        Args:
+            session_id (str): Session identifier.
+            limit (int): Number of recent messages to retrieve.
+        Returns:
+            List[Message]: List of recent messages.
+        """
         return (
             self.db.query(Message)
             .filter(Message.session_id == session_id)

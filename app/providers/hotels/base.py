@@ -12,13 +12,12 @@ class HotelProvider(ABC):
         self.db = db
     
     @abstractmethod
-    async def search_hotels(
-        self,
-        city: str,
-        country: Optional[str] = None,
-        budget_tier: str = "mid",
-        limit: int = 20,
-    ) -> List[Dict[str, Any]]:
+    async def search_hotels(self,
+                            city: str,
+                            country: Optional[str] = None,
+                            budget_tier: str = "mid",
+                            limit: int = 20,
+                        ) -> List[Dict[str, Any]]:
         """
         Search for hotels in a city.
         

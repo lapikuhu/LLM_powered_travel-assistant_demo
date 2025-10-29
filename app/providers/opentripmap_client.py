@@ -25,13 +25,19 @@ class OpenTripMapClient:
         # HTTP client with timeout
         self.client = httpx.Client(timeout=30.0)
     
-    async def search_places_by_bbox(
-        self,
-        bbox: str,  # "lon_min,lat_min,lon_max,lat_max"
-        kinds: Optional[str] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """Search places within bounding box."""
+    async def search_places_by_bbox(self,
+                                    bbox: str,  # "lon_min,lat_min,lon_max,lat_max"
+                                    kinds: Optional[str] = None,
+                                    limit: int = 50,
+                                ) -> List[Dict[str, Any]]:
+        """Search places within bounding box.
+        Args:
+            bbox (str): Bounding box in "lon_min,lat_min,lon_max,lat_max" format.
+            kinds (Optional[str]): Comma-separated kinds/categories to filter.
+            limit (int): Maximum number of results to return.
+        Returns:
+            List[Dict[str, Any]]: List of normalized place data.
+        """
         params = {
             "apikey": self.api_key,
             "bbox": bbox,
@@ -84,15 +90,23 @@ class OpenTripMapClient:
             logger.error(f"Unexpected error in OpenTripMap bbox search: {e}")
             return []
     
-    async def search_places_by_radius(
-        self,
-        lat: float,
-        lon: float,
-        radius: int = 5000,  # meters
-        kinds: Optional[str] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """Search places within radius of coordinates."""
+    async def search_places_by_radius(self,
+                                    lat: float,
+                                    lon: float,
+                                    radius: int = 5000,  # meters
+                                    kinds: Optional[str] = None,
+                                    limit: int = 50,
+                                ) -> List[Dict[str, Any]]:
+        """Search places within radius of coordinates.
+        Args:
+            lat (float): Latitude of center point.
+            lon (float): Longitude of center point.
+            radius (int): Search radius in meters.
+            kinds (Optional[str]): Comma-separated kinds/categories to filter.
+            limit (int): Maximum number of results to return.
+        Returns:
+            List[Dict[str, Any]]: List of normalized place data.
+        """
         params = {
             "apikey": self.api_key,
             "lat": lat,
@@ -148,7 +162,12 @@ class OpenTripMapClient:
             return []
     
     async def get_place_details(self, xid: str) -> Optional[Dict[str, Any]]:
-        """Get detailed information about a specific place."""
+        """Get detailed information about a specific place.
+        Args:
+            xid (str): External ID of the place.
+        Returns:
+            Optional[Dict[str, Any]]: Normalized place detail data or None if not found.
+        """
         params = {
             "apikey": self.api_key,
         }
@@ -196,7 +215,12 @@ class OpenTripMapClient:
             return None
     
     def _normalize_places(self, features: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Normalize place data from API response."""
+        """Normalize place data from API response.
+        Args:
+            features (List[Dict[str, Any]]): List of place features from API.
+        Returns:
+            List[Dict[str, Any]]: List of normalized place data.
+        """
         normalized = []
         
         for feature in features:
@@ -235,7 +259,12 @@ class OpenTripMapClient:
         return normalized
     
     def _normalize_place_detail(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Normalize detailed place data."""
+        """Normalize detailed place data.
+        Args:
+            data (Dict[str, Any]): Place detail data from API.
+        Returns:
+            Optional[Dict[str, Any]]: Normalized place detail data or None on error.
+        """
         try:
             # Extract coordinates from point geometry
             coordinates = [0, 0]
@@ -276,13 +305,23 @@ class OpenTripMapClient:
             return None
     
     def _parse_kinds(self, kinds_string: str) -> List[str]:
-        """Parse kinds string into category list."""
+        """Parse kinds string into category list.
+        Args:
+            kinds_string (str): Comma-separated kinds string.
+        Returns:
+            List[str]: List of category strings.
+        """
         if not kinds_string:
             return []
         return [kind.strip() for kind in kinds_string.split(",") if kind.strip()]
     
     def _format_address(self, address_info: Dict[str, Any]) -> Optional[str]:
-        """Format address from address components."""
+        """Format address from address components.
+        Args:
+            address_info (Dict[str, Any]): Address components.
+        Returns:
+            Optional[str]: Formatted address string or None if empty.
+        """
         if not address_info:
             return None
         

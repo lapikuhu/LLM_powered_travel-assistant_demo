@@ -16,14 +16,26 @@ class CacheRepository:
         self.db = db
     
     def _hash_params(self, params: Dict[str, Any]) -> str:
-        """Create a hash of parameters for cache key."""
+        """Create a hash of parameters for cache key.
+        Args:
+            params (Dict[str, Any]): Parameters dictionary.
+        Returns:
+            str: SHA256 hash of the parameters.
+        """
         params_str = json.dumps(params, sort_keys=True, default=str)
         return hashlib.sha256(params_str.encode()).hexdigest()
     
     def get_cached_response(
         self, provider: str, endpoint: str, params: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """Get cached response if still valid."""
+        """Get cached response if still valid.
+        Args:
+            provider (str): Data provider name.
+            endpoint (str): API endpoint.
+            params (Dict[str, Any]): Parameters dictionary.
+        Returns:
+            Optional[Dict[str, Any]]: Cached response JSON or None if not found/expired
+        """
         params_hash = self._hash_params(params)
         
         cache_entry = (
@@ -48,15 +60,23 @@ class CacheRepository:
         
         return None
     
-    def cache_response(
-        self,
-        provider: str,
-        endpoint: str,
-        params: Dict[str, Any],
-        response: Dict[str, Any],
-        ttl_seconds: int,
-    ) -> APICache:
-        """Cache an API response."""
+    def cache_response(self,
+                        provider: str,
+                        endpoint: str,
+                        params: Dict[str, Any],
+                        response: Dict[str, Any],
+                        ttl_seconds: int,
+                    ) -> APICache:
+        """Cache an API response.
+        Args:
+            provider (str): Data provider name.
+            endpoint (str): API endpoint.
+            params (Dict[str, Any]): Parameters dictionary.
+            response (Dict[str, Any]): Response data to cache.
+            ttl_seconds (int): Time-to-live for the cache entry.
+        Returns:
+            APICache: Created or updated cache entry.
+        """
         params_hash = self._hash_params(params)
         
         try:
@@ -121,7 +141,12 @@ class CacheRepository:
                 raise e
     
     def clear_expired_cache(self) -> int:
-        """Clear all expired cache entries. Returns number of entries cleared."""
+        """Clear all expired cache entries. Returns number of entries cleared.
+        Args:
+            None
+        Returns:
+            int: Number of expired cache entries removed.
+        """
         now = datetime.utcnow()
         expired_entries = (
             self.db.query(APICache)
@@ -140,7 +165,12 @@ class CacheRepository:
         return count
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
+        """Get cache statistics.
+        Args:
+            None
+        Returns:
+            Dict[str, Any]: Cache statistics including total entries and breakdown by provider.
+        """
         total_entries = self.db.query(APICache).count()
         
         # Get stats by provider

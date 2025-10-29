@@ -1,4 +1,8 @@
-"""Tool action schema definitions for LLM orchestrator."""
+"""Tool action schema definitions for LLM orchestrator.
+Defines the structure of various travel-related actions that can be executed
+by the orchestration layer, such as searching for points of interest (POIs),
+hotels, and finalizing itineraries.
+Used by the llm_orchestrator to validate and execute actions requested by the LLM."""
 
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
