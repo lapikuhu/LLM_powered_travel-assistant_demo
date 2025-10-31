@@ -1,8 +1,10 @@
 # Travel Assistant Chatbot 🌍✈️
+Github repo:
+https://github.com/lapikuhu/LLM_powered_travel-assistant_demo
 
 A simple city-trip itinerary generator via chat interface, built with FastAPI and powered by OpenAI's GPT models. This application creates personalized day-by-day travel itineraries by integrating with OpenTripMap for points of interest and providing hotel recommendations.
 
-__NOTE__:  The core of the repo was built iteratively with agentic Copilot using a design brief and a specs file (included in the spec_folder) prescribing the architecture, the functionality and the stack as a proof-of-concept of the methodology. Manual code review, corrections and debugging were of course implemented.  
+__NOTE__:  The core of the repo was built iteratively with agentic Copilot using a design brief and a specs file (included in the spec_folder) prescribing the architecture, the functionality and the stack as a proof-of-concept of the methodology. Manual code review, corrections and debugging were of course implemented. As of 31/10/2025, API responses are still empty. 
 
 ## Features
 
