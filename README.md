@@ -69,36 +69,15 @@ alembic upgrade head
 python scripts/seed_stub_hotels.py
 ```
 
-### 5. Run the Application
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Visit `http://localhost:8000` to start planning your trip!
-
 ## Docker Deployment
 
-### Using Docker Compose (Recommended)
-
-```bash
-# With SQLite
-docker-compose up -d
 
 # With PostgreSQL
 docker-compose --profile postgres up -d
-```
-
-### Manual Docker Build
-
-```bash
-docker build -t travel-assistant .
 docker run -p 8000:8000 --env-file .env travel-assistant
 ```
 
 ## API Keys Setup
-
-### OpenAI API Key (Required)
 1. Visit [OpenAI Platform](https://platform.openai.com/)
 2. Create an account and add billing
 3. Generate an API key
@@ -160,19 +139,11 @@ The application enforces a $10 monthly spend limit on OpenAI API calls:
 - **Alerts**: Warnings at 80% usage, blocking at 100%
 - **Graceful degradation**: Fallback responses when capped
 - **Reset**: Automatic monthly reset
-
-Cost estimates are based on token usage and current OpenAI pricing. Adjust the cap in `MONTHLY_SPEND_CAP_USD`.
-
 ## Architecture
 
 ### Components
 
 - **Web Backend**: FastAPI routes, Jinja2 templates
-- **LLM Orchestrator**: GPT integration with tool calling
-- **Provider Layer**: OpenTripMap and hotel API wrappers
-- **Repository Layer**: Database access with caching
-- **Admin Interface**: Usage monitoring and system health
-
 ### Data Flow
 
 ```
@@ -192,7 +163,6 @@ User Input → FastAPI → LLM Orchestrator → [Tool Actions] → Database → 
 
 ## API Endpoints
 
-- `GET /` - Chat interface
 - `POST /chat` - Process chat message
 - `GET /api/v1/itineraries/{id}` - Export itinerary JSON
 - `GET /admin` - Admin dashboard (HTTP Basic auth)
@@ -234,21 +204,11 @@ ruff check app/ tests/
 # Type checking
 mypy app/
 ```
-
-### Database Migrations
-
-```bash
 # Create migration
 alembic revision --autogenerate -m "Description"
 
 # Apply migrations
 alembic upgrade head
-
-# Rollback migration
-alembic downgrade -1
-```
-
-## Configuration
 
 ### Environment Variables
 
@@ -256,9 +216,6 @@ alembic downgrade -1
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No | SQLite | Database connection string |
 | `OPENAI_API_KEY` | Yes | - | OpenAI API key |
-| `OPENAI_MODEL` | No | gpt-4 | OpenAI model to use |
-| `MONTHLY_SPEND_CAP_USD` | No | 10.0 | Monthly spend limit |
-| `OPENTRIPMAP_API_KEY` | Yes | - | OpenTripMap API key |
 | `RAPIDAPI_KEY` | No | - | RapidAPI key for hotels |
 | `RAPIDAPI_HOTELS_ENABLED` | No | false | Enable RapidAPI hotels |
 | `ADMIN_USERNAME` | No | admin | Admin dashboard username |

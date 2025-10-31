@@ -58,7 +58,7 @@ class OpenTripMapClient:
         
         if cached:
             logger.info(f"Cache hit for bbox search: {bbox}")
-            return self._normalize_places(cached.get("features", []))
+            return self._normalize_search_response(cached)
         
         # Make API call
         try:
@@ -81,8 +81,9 @@ class OpenTripMapClient:
                 logger.warning(f"Failed to cache OpenTripMap response: {cache_error}")
                 # Continue processing even if caching fails
             
-            logger.info(f"API call successful for bbox: {bbox}, found {len(data.get('features', []))} places")
-            return self._normalize_places(data.get("features", []))
+            normalized = self._normalize_search_response(data)
+            logger.info(f"API call successful for bbox: {bbox}, found {len(normalized)} places")
+            return normalized
             
         except httpx.HTTPError as e:
             logger.error(f"OpenTripMap API error for bbox {bbox}: {e}")
@@ -130,7 +131,7 @@ class OpenTripMapClient:
         
         if cached:
             logger.info(f"Cache hit for radius search: {lat},{lon}")
-            return self._normalize_places(cached.get("features", []))
+            return self._normalize_search_response(cached)
         
         # Make API call
         try:
@@ -153,8 +154,33 @@ class OpenTripMapClient:
                 logger.warning(f"Failed to cache OpenTripMap response: {cache_error}")
                 # Continue processing even if caching fails
             
-            logger.info(f"API call successful for radius: {lat},{lon}, found {len(data.get('features', []))} places")
-            return self._normalize_places(data.get("features", []))
+            normalized = self._normalize_search_response(data)
+            # If geojson returned 0 places, try a fallback call using JSON format
+            if not normalized:
+                try:
+                    fallback_params = dict(params)
+                    fallback_params["format"] = "json"
+                    fallback_response = self.client.get(url, params=fallback_params)
+                    fallback_response.raise_for_status()
+                    fallback_data = fallback_response.json()
+                    normalized = self._normalize_search_response(fallback_data)
+                    if normalized:
+                        # Best-effort cache the fallback response too
+                        try:
+                            self.cache_repo.cache_response(
+                                provider="opentripmap",
+                                endpoint="radius_search",
+                                params=fallback_params,
+                                response=fallback_data,
+                                ttl_seconds=self.cache_ttl,
+                            )
+                        except Exception:
+                            pass
+                except Exception as fallback_err:
+                    logger.info(f"OpenTripMap JSON fallback yielded no results or failed: {fallback_err}")
+
+            logger.info(f"API call successful for radius: {lat},{lon}, found {len(normalized)} places")
+            return normalized
             
         except httpx.HTTPError as e:
             logger.error(f"OpenTripMap API error for radius {lat},{lon}: {e}")
@@ -259,6 +285,41 @@ class OpenTripMapClient:
                 continue
         
         return normalized
+
+    def _normalize_search_response(self, data: Any) -> List[Dict[str, Any]]:
+        """Normalize either GeoJSON FeatureCollection or JSON list response.
+        Args:
+            data (Any): API response JSON.
+        Returns:
+            List[Dict[str, Any]]: Normalized places.
+        """
+        try:
+            # GeoJSON FeatureCollection
+            if isinstance(data, dict) and isinstance(data.get("features"), list):
+                return self._normalize_places(data.get("features", []))
+
+            # Plain JSON list (each item contains at least xid, name, point{lat,lon})
+            if isinstance(data, list):
+                pseudo_features: List[Dict[str, Any]] = []
+                for item in data:
+                    lon = item.get("point", {}).get("lon") if isinstance(item.get("point"), dict) else None
+                    lat = item.get("point", {}).get("lat") if isinstance(item.get("point"), dict) else None
+                    # Build a GeoJSON-like feature for reuse of the same normalizer
+                    feature = {
+                        "type": "Feature",
+                        "properties": item,
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [lon or 0, lat or 0],
+                        },
+                    }
+                    pseudo_features.append(feature)
+                return self._normalize_places(pseudo_features)
+        except Exception as e:
+            logger.warning(f"Failed to normalize search response: {e}")
+            return []
+
+        return []
     
     def _normalize_place_detail(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Normalize detailed place data.

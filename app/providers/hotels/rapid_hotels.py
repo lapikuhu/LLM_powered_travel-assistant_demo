@@ -25,12 +25,16 @@ class RapidAPIHotelProvider(HotelProvider):
         self.cache_repo = CacheRepository(db)
         
         # HTTP client with timeout and headers
+        # Avoid setting a None API key header when key isn't configured
+        headers = {
+            "X-RapidAPI-Host": "booking-com.p.rapidapi.com",
+        }
+        if self.api_key:
+            headers["X-RapidAPI-Key"] = self.api_key
+
         self.client = httpx.Client(
             timeout=30.0,
-            headers={
-                "X-RapidAPI-Key": self.api_key,
-                "X-RapidAPI-Host": "booking-com.p.rapidapi.com"
-            }
+            headers=headers,
         )
     
     async def search_hotels(self,
