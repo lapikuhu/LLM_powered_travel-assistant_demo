@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-4"
     monthly_spend_cap_usd: float = 10.0
+    # Optional headers for org/project-scoped keys
+    openai_organization: Optional[str] = None
+    openai_project: Optional[str] = None
     
     # OpenTripMap
     opentripmap_api_key: str

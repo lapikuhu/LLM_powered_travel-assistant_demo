@@ -42,7 +42,8 @@ class OpenTripMapClient:
             "apikey": self.api_key,
             "bbox": bbox,
             "limit": limit,
-            "format": "json",
+            # Use GeoJSON so response has a FeatureCollection with `features`
+            "format": "geojson",
         }
         
         if kinds:
@@ -113,7 +114,8 @@ class OpenTripMapClient:
             "lon": lon,
             "radius": radius,
             "limit": limit,
-            "format": "json",
+            # Use GeoJSON so response has a FeatureCollection with `features`
+            "format": "geojson",
         }
         
         if kinds:

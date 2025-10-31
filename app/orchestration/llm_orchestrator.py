@@ -49,9 +49,16 @@ class LLMOrchestrator:
         self.itinerary_repo = ItineraryRepository(db)
         
         # OpenAI client
+        headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+        # Optional org/project headers for scoped keys
+        if getattr(settings, "openai_organization", None):
+            headers["OpenAI-Organization"] = settings.openai_organization  # type: ignore
+        if getattr(settings, "openai_project", None):
+            headers["OpenAI-Project"] = settings.openai_project  # type: ignore
+
         self.openai_client = httpx.Client(
             base_url="https://api.openai.com/v1",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            headers=headers,
             timeout=60.0
         )
     
@@ -367,7 +374,15 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             }
             
         except httpx.HTTPError as e:
-            logger.error(f"OpenAI API error: {e}")
+            # Include server error response if available to aid debugging (401s, etc.)
+            try:
+                detail = e.response.text  # type: ignore[attr-defined]
+            except Exception:
+                detail = None
+            if detail:
+                logger.error(f"OpenAI API error: {e} | detail: {detail}")
+            else:
+                logger.error(f"OpenAI API error: {e}")
             return {"success": False, "error": str(e)}
         except Exception as e:
             logger.error(f"Unexpected error in LLM call: {e}")
