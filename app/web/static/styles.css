@@ -374,6 +374,19 @@ main {
     transition: width 0.5s ease;
 }
 
+/* Solid color variants for admin usage bar */
+.progress.ok {
+    background: #22c55e; /* green */
+}
+
+.progress.warning {
+    background: #f59e0b; /* amber */
+}
+
+.progress.danger {
+    background: #ef4444; /* red */
+}
+
 /* Data tables */
 .table-container {
     overflow-x: auto;

@@ -19,6 +19,7 @@ from app.repositories.itineraries import ItineraryRepository
 from app.repositories.ledger import LedgerRepository
 from app.repositories.cache import CacheRepository
 from app.web.forms import ChatForm
+from app.utils.tokens import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,13 @@ async def chat(
                     "content": msg.content,  # keep raw content for any non-HTML consumers
                     "content_html": render_markdown(msg.content),  # html only for template rendering
                     "timestamp": msg.created_at.strftime("%H:%M"),
+                    # Token count to display: use tokens_in for user/system, tokens_out for assistant.
+                    # Fallback to estimation when missing.
+                    "token_count": (
+                        (msg.tokens_in if msg.role in ["user", "system"] else msg.tokens_out)
+                        if (msg.tokens_in is not None or msg.tokens_out is not None)
+                        else estimate_tokens(msg.content)
+                    ),
                 }
                 for msg in messages
             ],

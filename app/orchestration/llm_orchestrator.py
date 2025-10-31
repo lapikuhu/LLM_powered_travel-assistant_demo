@@ -1,11 +1,12 @@
 """LLM Orchestrator for handling chat and tool actions.
 This is the main orchestration layer that manages LLM calls,
-tool executions, and itinerary creation."""
+tool executions and fallbacks, and itinerary creation."""
 
 import json
+import re
 import logging
 from datetime import datetime, date
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import httpx
 from sqlalchemy.orm import Session as DBSession
 
@@ -21,6 +22,7 @@ from app.providers.hotels.rapid_hotels import RapidAPIHotelProvider
 from app.repositories.sessions import SessionRepository
 from app.repositories.messages import MessageRepository
 from app.repositories.itineraries import ItineraryRepository
+from app.utils.tokens import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +80,18 @@ class LLMOrchestrator:
         if self.spend_cap.is_spend_cap_exceeded():
             fallback_response = self.spend_cap.get_fallback_response()
             # Store the user message and fallback response
-            self.message_repo.create_message(session_id, "user", user_message)
-            self.message_repo.create_message(session_id, "assistant", fallback_response)
+            self.message_repo.create_message(
+                session_id,
+                "user",
+                user_message,
+                tokens_in=estimate_tokens(user_message),
+            )
+            self.message_repo.create_message(
+                session_id,
+                "assistant",
+                fallback_response,
+                tokens_out=estimate_tokens(fallback_response),
+            )
             
             return {
                 "response": fallback_response,
@@ -89,16 +101,28 @@ class LLMOrchestrator:
             }
         
         try:
-            # Store user message
-            self.message_repo.create_message(session_id, "user", user_message)
+            # Store user message with estimated input tokens for display
+            self.message_repo.create_message(
+                session_id,
+                "user",
+                user_message,
+                tokens_in=estimate_tokens(user_message),
+            )
             
             # Get conversation history
             messages = self._build_conversation_context(
                 session_id, user_message, destination, start_date, end_date, budget_tier
             )
             
-            # Make LLM call
-            response = await self._call_llm_with_tools(messages, session_id)
+            # Make LLM call (pass form context so fallback preserves it)
+            response = await self._call_llm_with_tools(
+                messages,
+                session_id,
+                destination=destination,
+                start_date=start_date,
+                end_date=end_date,
+                budget_tier=budget_tier,
+            )
             
             if not response["success"]:
                 error_msg = "I encountered an error processing your request. Please try again."
@@ -135,7 +159,12 @@ class LLMOrchestrator:
             error_msg = "I encountered an unexpected error. Please try again."
             
             try:
-                self.message_repo.create_message(session_id, "assistant", error_msg)
+                self.message_repo.create_message(
+                    session_id,
+                    "assistant",
+                    error_msg,
+                    tokens_out=estimate_tokens(error_msg),
+                )
             except Exception:
                 pass  # Don't fail if we can't store the error message
             
@@ -241,7 +270,12 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
     
     async def _call_llm_with_tools(self,
                                     messages: List[Dict[str, str]],
-                                    session_id: str
+                                    session_id: str,
+                                    *,
+                                    destination: Optional[str] = None,
+                                    start_date: Optional[str] = None,
+                                    end_date: Optional[str] = None,
+                                    budget_tier: Optional[str] = None,
                                 ) -> Dict[str, Any]:
         """Make LLM call with tool support.
         messages (List[Dict[str, str]]): Conversation messages.
@@ -287,13 +321,47 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             # Check for tool calls
             if message.get("tool_calls"):
                 return await self._handle_tool_calls(
-                    message["tool_calls"], session_id, prompt_tokens, completion_tokens
+                    message["tool_calls"],
+                    session_id,
+                    prompt_tokens,
+                    completion_tokens,
+                    destination=destination,
+                    start_date=start_date,
+                    end_date=end_date,
+                    budget_tier=budget_tier,
                 )
             
-            # Regular response
+            # Some models may emit a pseudo tool call in plain text instead of tool_calls
+            pseudo_calls = None
+            preface_text = ""
+            try:
+                pseudo_calls, preface_text = self._parse_pseudo_tool_calls(message.get("content") or "")
+            except Exception:
+                pseudo_calls = None
+
+            if pseudo_calls:
+                result = await self._handle_tool_calls(
+                    pseudo_calls,
+                    session_id,
+                    prompt_tokens,
+                    completion_tokens,
+                    destination=destination,
+                    start_date=start_date,
+                    end_date=end_date,
+                    budget_tier=budget_tier,
+                )
+                # Preserve any friendly preface the model wrote before the tool call
+                if preface_text.strip():
+                    combined = preface_text.strip()
+                    if result.get("content"):
+                        combined += "\n\n" + result["content"]
+                    result["content"] = combined
+                return result
+
+            # Regular response when there are no tools involved
             return {
                 "success": True,
-                "content": message["content"],
+                "content": message.get("content", ""),
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
             }
@@ -309,7 +377,12 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                                 tool_calls: List[Dict[str, Any]],
                                 session_id: str,
                                 prompt_tokens: int,
-                                completion_tokens: int
+                                completion_tokens: int,
+                                *,
+                                destination: Optional[str] = None,
+                                start_date: Optional[str] = None,
+                                end_date: Optional[str] = None,
+                                budget_tier: Optional[str] = None,
                             ) -> Dict[str, Any]:
         """Handle tool calls from LLM. Called by _call_llm_with_tools.
         Handles failures in POI searches by continuing the conversation
@@ -345,14 +418,25 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                         error="Invalid tool call format"
                     ))
         
+        # Determine if any tool failures should trigger fallback continuation
+        poi_failed = any(
+            r.action == "search_pois" and r.success and isinstance(r.data, dict) and r.data.get("count", 0) == 0
+            for r in results
+        )
+        hotel_failed = any(
+            r.action == "search_hotels" and r.success and isinstance(r.data, dict) and r.data.get("count", 0) == 0
+            for r in results
+        )
+        itinerary_created = any(r.action == "finalize_itinerary" and r.success for r in results)
+
         # Generate response based on results
         response_content = self._generate_tool_response(results)
         
-        # If tool response is empty (POI search failed), continue LLM conversation
-        if not response_content:
+        # If tool response is empty OR hotel/POI search failed without itinerary, continue with LLM conversation
+        if not response_content or ((poi_failed or hotel_failed) and not itinerary_created):
             logger.info("Tool response empty (POI search failed), continuing with LLM conversation")
             
-            # Add the tool results to conversation as system message
+            # Add the tool results and original form context to conversation as system messages
             tool_summary = self._generate_tool_summary_for_llm(results)
             
             # Continue the conversation by making another LLM call without tools.
@@ -363,9 +447,27 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                 original_messages = self.message_repo.get_recent_messages(session_id, limit=8)
                 conversation_context = []
                 
-                # Add system prompt with tool results
-                system_prompt = self._get_system_prompt() + f"\n\nTool results: {tool_summary}"
+                # Add system prompt
+                system_prompt = self._get_system_prompt()
                 conversation_context.append({"role": "system", "content": system_prompt})
+
+                # Include original form context so the model doesn't ask again
+                context_parts: List[str] = []
+                if destination:
+                    context_parts.append(f"Destination: {destination}")
+                if start_date and end_date:
+                    context_parts.append(f"Travel dates: {start_date} to {end_date}")
+                if budget_tier:
+                    context_parts.append(f"Budget tier: {budget_tier}")
+                if context_parts:
+                    context_message = "Travel planning context:\n" + "\n".join(context_parts)
+                    conversation_context.append({"role": "system", "content": context_message})
+
+                # Summarize tool results for continuity
+                conversation_context.append({
+                    "role": "system",
+                    "content": f"Tool results: {tool_summary}"
+                })
                 
                 # Add recent history (excluding the most recent user message which is being processed)
                 for msg in reversed(original_messages):
@@ -797,3 +899,60 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             self.close()
         except Exception:
             pass
+
+    # ---------------------------
+    # Helpers
+    # ---------------------------
+    def _parse_pseudo_tool_calls(self, content: str) -> Tuple[Optional[List[Dict[str, Any]]], str]:
+        """Parse pseudo tool calls embedded in assistant text.
+
+        Expected format, possibly repeated:
+        [some_action]
+        { ...json... }
+
+        Matches any square-bracketed tag that contains the word 'action' (case-insensitive),
+        e.g., [execute_travel_action], [action], [customActionTag].
+
+        Returns a tuple of (tool_calls, preface_text). `tool_calls` is a list in the
+        same shape as OpenAI's tool_calls with function name and JSON string arguments.
+        The `preface_text` is any content before the first pseudo call.
+        """
+        pattern = re.compile(r"\[[^\]]*action[^\]]*\]", re.IGNORECASE)
+        first_match = pattern.search(content)
+        if not first_match:
+            return None, ""
+
+        preface = content[:first_match.start()]
+        calls: List[Dict[str, Any]] = []
+
+        for m in pattern.finditer(content):
+            # Find the start of JSON block after the tag
+            brace_start = content.find("{", m.end())
+            if brace_start == -1:
+                continue
+            # Extract balanced JSON braces
+            depth = 0
+            i = brace_start
+            while i < len(content):
+                ch = content[i]
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        json_str = content[brace_start:i + 1]
+                        calls.append({
+                            "function": {
+                                # Keep the single known function name the tool schema expects
+                                "name": "execute_travel_action",
+                                "arguments": json_str,
+                            }
+                        })
+                        break
+                i += 1
+            # If braces never balanced, skip this match
+
+        if not calls:
+            return None, preface
+
+        return calls, preface

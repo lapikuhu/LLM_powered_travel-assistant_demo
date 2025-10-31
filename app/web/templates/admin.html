@@ -9,34 +9,47 @@
     <!-- Spend Cap Status -->
     <section class="card">
         <h3>💰 Monthly Spend Status</h3>
+
+        {# Normalize numbers and guard zero-division #}
+    {% set cap = (system_info.monthly_cap_usd or 0) | float %}
+    {% set spend = (monthly_stats.total_cost_usd or 0) | float %}
+    {% set usage_ratio = 0 if cap == 0 else (spend / cap) %}
+    {# Clamp percentage to [0, 100] to avoid overflow or negative widths #}
+    {% set raw_usage_pct = usage_ratio * 100 %}
+    {% set usage_pct = 0 if raw_usage_pct < 0 else (100 if raw_usage_pct > 100 else raw_usage_pct) %}
+
         <div class="stats-grid">
             <div class="stat">
                 <label>Monthly Cap:</label>
-                <span class="value">${{ "%.2f"|format(system_info.monthly_cap_usd) }}</span>
+                <span class="value">${{ '%.2f'|format(cap) }}</span>
             </div>
             <div class="stat">
                 <label>Current Spend:</label>
-                <span class="value">${{ "%.2f"|format(monthly_stats.total_cost_usd) }}</span>
+                <span class="value">${{ '%.2f'|format(spend) }}</span>
             </div>
             <div class="stat">
                 <label>Remaining:</label>
-                <span class="value">${{ "%.2f"|format(system_info.monthly_cap_usd - monthly_stats.total_cost_usd) }}</span>
+                <span class="value">${{ '%.2f'|format(cap - spend) }}</span>
             </div>
             <div class="stat">
                 <label>Usage:</label>
-                <span class="value">{{ "%.1f"|format((monthly_stats.total_cost_usd / system_info.monthly_cap_usd) * 100) }}%</span>
+                <span class="value">{{ '%.1f'|format(usage_pct) }}%</span>
             </div>
         </div>
         
         <div class="progress-bar">
-            <div class="progress" style="width: {{ (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) * 100 }}%"></div>
+            {# Use solid color based on thresholds so the color reflects the fraction #}
+            <div
+                class="progress {{ 'danger' if usage_ratio >= 1.0 else ('warning' if usage_ratio >= 0.8 else 'ok') }}"
+                style="width: {{ usage_pct|round(1, 'floor') }}%">
+            </div>
         </div>
         
-        {% if (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) >= 1.0 %}
+        {% if usage_ratio >= 1.0 %}
         <div class="alert alert-error">
             🚨 Monthly spend cap exceeded! LLM calls are blocked.
         </div>
-        {% elif (monthly_stats.total_cost_usd / system_info.monthly_cap_usd) >= 0.8 %}
+        {% elif usage_ratio >= 0.8 %}
         <div class="alert alert-warning">
             ⚠️ Warning: 80% of monthly budget used.
         </div>
@@ -53,11 +66,11 @@
             </div>
             <div class="stat">
                 <label>Prompt Tokens:</label>
-                <span class="value">{{ "{:,}"|format(monthly_stats.total_prompt_tokens) }}</span>
+                <span class="value">{{ '{:,}'.format(monthly_stats.total_prompt_tokens) }}</span>
             </div>
             <div class="stat">
                 <label>Completion Tokens:</label>
-                <span class="value">{{ "{:,}"|format(monthly_stats.total_completion_tokens) }}</span>
+                <span class="value">{{ '{:,}'.format(monthly_stats.total_completion_tokens) }}</span>
             </div>
             <div class="stat">
                 <label>Blocked Calls:</label>

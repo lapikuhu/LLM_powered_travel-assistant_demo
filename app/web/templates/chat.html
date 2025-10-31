@@ -25,7 +25,7 @@
                 <div class="message-content">
                     <strong>{% if message.role == 'user' %}You{% else %}Assistant{% endif %}:</strong>
                     <div class="content">{{ message.content_html | safe }}</div>
-                    <small class="timestamp">{{ message.timestamp }}</small>
+                    <small class="timestamp">{{ message.timestamp }}{% if message.token_count is not none %} • {{ message.token_count }} tokens{% endif %}</small>
                 </div>
             </div>
             {% endfor %}

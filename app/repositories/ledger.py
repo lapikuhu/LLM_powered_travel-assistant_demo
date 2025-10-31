@@ -171,9 +171,25 @@ class LedgerRepository:
             .all()
         )
         
+        # SQLite returns dates as strings (YYYY-MM-DD) while PostgreSQL returns date objects.
+        # Normalize to ISO date string without assuming the type.
+        def _to_iso_date(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            try:
+                from datetime import date as _date, datetime as _datetime
+                if isinstance(value, _datetime):
+                    return value.date().isoformat()
+                if isinstance(value, _date):
+                    return value.isoformat()
+            except Exception:
+                pass
+            # Fallback: best-effort string conversion (works for SQLite 'YYYY-MM-DD')
+            return str(value)
+
         return [
             {
-                "date": result.date.isoformat() if result.date else None,
+                "date": _to_iso_date(result.date),
                 "cost_usd": float(result.cost or 0),
                 "calls": result.calls or 0
             }
