@@ -32,12 +32,8 @@
         {% else %}
         <div class="welcome-message">
             <h2>Welcome to your Travel Assistant! ✈️</h2>
-            <p>I'm here to help you plan amazing city trips. Just tell me:</p>
-            <ul>
-                <li>Where you'd like to go</li>
-                <li>When you're traveling</li>
-                <li>Your budget preference (budget/mid/premium)</li>
-            </ul>
+            <p>I'm here to help you plan amazing city trips. Just tell me:
+                Where you'd like to go, when you're traveling, and your budget preference.
             <p>I'll create a personalized day-by-day itinerary with great places to visit, hotels, and local recommendations!</p>
         </div>
         {% endif %}
@@ -72,12 +68,22 @@
 
         <div class="form-row">
             <div class="form-group">
-                <label for="destination">Destination (optional):</label>
+                <label for="country">Country (optional):</label>
                 <input 
                     type="text" 
-                    name="destination" 
-                    id="destination" 
-                    placeholder="e.g., Athens, Paris, Rome"
+                    name="country" 
+                    id="country" 
+                    placeholder="e.g., Greece"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="city">City (optional):</label>
+                <input 
+                    type="text" 
+                    name="city" 
+                    id="city" 
+                    placeholder="e.g., Athens"
                 >
             </div>
 
@@ -91,7 +97,7 @@
             </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row form-row-dates">
             <div class="form-group">
                 <label for="start_date">Start Date (optional):</label>
                 <input type="date" name="start_date" id="start_date">
@@ -121,6 +127,61 @@ document.addEventListener('DOMContentLoaded', function() {
     const messageInput = document.getElementById('message');
     if (messageInput) {
         messageInput.focus();
+    }
+
+    // Set default dates: start=today, end=tomorrow (only if empty)
+    try {
+        const startInput = document.getElementById('start_date');
+        const endInput = document.getElementById('end_date');
+        const formatDate = (d) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+        const parseLocalDate = (str) => {
+            // Parse YYYY-MM-DD as local date to avoid timezone shifts
+            const [y, m, d] = str.split('-').map(Number);
+            if (!y || !m || !d) return null;
+            return new Date(y, m - 1, d);
+        };
+
+        const today = new Date();
+        const todayStr = formatDate(today);
+        const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        const tomorrowStr = formatDate(tomorrow);
+
+        if (startInput && !startInput.value) startInput.value = todayStr;
+        if (endInput && !endInput.value) endInput.value = tomorrowStr;
+        if (endInput) endInput.min = tomorrowStr;
+
+        // Ensure end date is at least next day of current start date
+        if (startInput && endInput && startInput.value) {
+            const s = parseLocalDate(startInput.value);
+            if (s) {
+                const next = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1);
+                const nextStr = formatDate(next);
+                endInput.min = nextStr;
+                const currentEnd = endInput.value ? parseLocalDate(endInput.value) : null;
+                if (!currentEnd || currentEnd <= s) {
+                    endInput.value = nextStr;
+                }
+            }
+        }
+
+        // When start date changes, set end date to next day and enforce min
+        if (startInput && endInput) {
+            startInput.addEventListener('change', function() {
+                const s = parseLocalDate(this.value);
+                if (!s) return;
+                const next = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1);
+                const nextStr = formatDate(next);
+                endInput.min = nextStr;
+                endInput.value = nextStr; // auto-advance end date to next day
+            });
+        }
+    } catch (e) {
+        // ignore
     }
 });
 

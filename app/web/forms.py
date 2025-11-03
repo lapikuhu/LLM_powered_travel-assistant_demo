@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, validator
 class ChatForm(BaseModel):
     """Form for chat messages."""
     message: str = Field(..., min_length=1, max_length=1000, description="Chat message")
-    destination: Optional[str] = Field(None, max_length=100, description="Destination city")
+    # Split destination into structured fields
+    city: Optional[str] = Field(None, max_length=100, description="Destination city")
+    country: Optional[str] = Field(None, max_length=100, description="Destination country")
     start_date: Optional[date] = Field(None, description="Start date")
     end_date: Optional[date] = Field(None, description="End date")
     budget_tier: Optional[str] = Field(None, description="Budget tier")

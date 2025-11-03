@@ -9,6 +9,7 @@ __NOTE__:  The core of the repo was built iteratively with agentic Copilot using
 ## Features
 
 - 💬 **Chat Interface**: Server-rendered chat with no JavaScript required
+- 💬 **Chat Interface**: Server-rendered chat with no JavaScript required (optional City/Country fields)
 - 🏛️ **POI Integration**: Real-time data from OpenTripMap API
 - 🏨 **Hotel Recommendations**: Static stub provider with optional RapidAPI integration
 - 💰 **Spend Cap Management**: Built-in $10 monthly LLM spend limit with graceful degradation
@@ -103,7 +104,7 @@ docker run -p 8000:8000 --env-file .env travel-assistant
 
 1. **Visit the home page** at `http://localhost:8000`
 2. **Fill in the chat form** with your travel details:
-   - Destination city
+   - City and Country (optional, helps with accuracy)
    - Travel dates
    - Budget tier (budget/mid/premium)
    - Your message describing what you want to do
@@ -167,6 +168,17 @@ User Input → FastAPI → LLM Orchestrator → [Tool Actions] → Database → 
 - `GET /api/v1/itineraries/{id}` - Export itinerary JSON
 - `GET /admin` - Admin dashboard (HTTP Basic auth)
 - `GET /health` - Health check
+
+#### POST /chat form fields
+
+The server expects standard form fields from the chat page:
+
+- `message` (required): User message
+- `city` (optional): Destination city
+- `country` (optional): Destination country
+- `start_date` (optional, YYYY-MM-DD)
+- `end_date` (optional, YYYY-MM-DD)
+- `budget_tier` (optional: `budget` | `mid` | `premium`, defaults to `mid`)
 
 ## Development
 

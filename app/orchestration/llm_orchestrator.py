@@ -327,7 +327,11 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             
             # Check for tool calls
             if message.get("tool_calls"):
-                return await self._handle_tool_calls(
+                # Preserve any friendly preface text that the model produced
+                # alongside structured tool calls (some models include this).
+                preface_text = (message.get("content") or "").strip()
+
+                result = await self._handle_tool_calls(
                     message["tool_calls"],
                     session_id,
                     prompt_tokens,
@@ -337,6 +341,13 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                     end_date=end_date,
                     budget_tier=budget_tier,
                 )
+
+                if preface_text:
+                    combined = preface_text
+                    if result.get("content"):
+                        combined += "\n\n" + result["content"]
+                    result["content"] = combined
+                return result
             
             # Some models may emit a pseudo tool call in plain text instead of tool_calls
             pseudo_calls = None
@@ -413,6 +424,8 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
         
         results = []
         itinerary_id = None
+        finalize_city: Optional[str] = None
+        finalize_country: Optional[str] = None
         
         for tool_call in tool_calls:
             if tool_call["function"]["name"] == "execute_travel_action":
@@ -424,6 +437,9 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                     # Check if this was a finalize_itinerary action
                     if result.action == "finalize_itinerary" and result.success:
                         itinerary_id = result.data.get("itinerary_id")
+                        # Capture city/country for potential follow-up hotel search
+                        finalize_city = result.data.get("city")
+                        finalize_country = result.data.get("country")
                         
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON in tool call: {e}")
@@ -443,6 +459,30 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
             for r in results
         )
         itinerary_created = any(r.action == "finalize_itinerary" and r.success for r in results)
+
+        # If an itinerary was created but no hotel search was performed, proactively run one
+        # using the known destination and budget. This covers cases where the model said it
+        # would find hotels but didn't emit a tool call.
+        has_hotel_action = any(r.action == "search_hotels" for r in results)
+        if itinerary_created and not has_hotel_action and finalize_city:
+            try:
+                logger.info(
+                    "Auto-triggering hotel search after itinerary creation for %s (tier=%s)",
+                    finalize_city,
+                    budget_tier or "mid",
+                )
+                auto_hotel_args = {
+                    "action": "search_hotels",
+                    "city": finalize_city,
+                    # Include country if available from finalize result
+                    **({"country": finalize_country} if finalize_country else {}),
+                    "budget_tier": budget_tier or "mid",
+                    "limit": 10,
+                }
+                auto_hotel_result = await self._search_hotels_action(auto_hotel_args)
+                results.append(auto_hotel_result)
+            except Exception as e:
+                logger.warning(f"Auto hotel search failed: {e}")
 
         # Generate response based on results
         response_content = self._generate_tool_response(results)
@@ -755,6 +795,8 @@ Keep responses engaging and informative. Focus on creating memorable travel expe
                 data={
                     "itinerary_id": str(itinerary.id),
                     "city": city,
+                    "country": country,
+                    "budget_tier": budget_tier,
                     "days_count": len(days_data)
                 }
             )

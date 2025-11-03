@@ -118,7 +118,8 @@ async def home(request: Request):
 async def chat(
     request: Request,
     message: str = Form(...),
-    destination: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
     start_date: Optional[str] = Form(None),
     end_date: Optional[str] = Form(None),
     budget_tier: Optional[str] = Form("mid"),
@@ -132,7 +133,8 @@ async def chat(
         # Validate form data
         form_data = {
             "message": message,
-            "destination": destination,
+            "city": city,
+            "country": country,
             "budget_tier": budget_tier,
         }
         
@@ -181,10 +183,19 @@ async def chat(
         # Process chat message
         orchestrator = LLMOrchestrator(settings, db)
         try:
+            # Combine structured destination fields for LLM context only
+            destination_context = None
+            if form.city and form.country:
+                destination_context = f"{form.city}, {form.country}"
+            elif form.city:
+                destination_context = form.city
+            elif form.country:
+                destination_context = form.country
+
             result = await orchestrator.process_chat_message(
                 session_id=str(session.id),
                 user_message=form.message,
-                destination=form.destination,
+                destination=destination_context,
                 start_date=start_date,
                 end_date=end_date,
                 budget_tier=form.budget_tier,

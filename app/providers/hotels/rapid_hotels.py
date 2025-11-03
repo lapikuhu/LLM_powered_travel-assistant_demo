@@ -108,12 +108,13 @@ class RapidAPIHotelProvider(HotelProvider):
             return cached.get("result", [{}])[0] if cached.get("result") else None
         
         try:
+            # Primary endpoint attempt
             url = f"{self.base_url}/locations/search"
             response = self.client.get(url, params=params)
             response.raise_for_status()
-            
+
             data = response.json()
-            
+
             # Cache the response
             self.cache_repo.cache_response(
                 provider="rapidapi_hotels",
@@ -122,13 +123,51 @@ class RapidAPIHotelProvider(HotelProvider):
                 response=data,
                 ttl_seconds=self.cache_ttl * 24,  # Location data is more stable
             )
-            
+
             results = data.get("result", [])
             if results:
                 return results[0]  # Take first result
-            
+
+            # If primary returned empty, try fallback endpoint
+            logger.info("Primary location endpoint returned no results for %s; trying fallback", search_query)
+
+            fb_params = {"name": search_query, "locale": "en-us"}
+            cached_fb = self.cache_repo.get_cached_response(
+                provider="rapidapi_hotels",
+                endpoint="locations_fallback",
+                params=fb_params,
+            )
+            if cached_fb:
+                logger.info("Cache hit for fallback location search: %s", search_query)
+                fb_results = cached_fb.get("result") if isinstance(cached_fb, dict) else cached_fb
+                if isinstance(fb_results, list) and fb_results:
+                    return fb_results[0]
+                return None
+
+            fb_url = f"{self.base_url}/hotels/locations"
+            fb_response = self.client.get(fb_url, params=fb_params)
+            fb_response.raise_for_status()
+            fb_data = fb_response.json()
+
+            # Cache fallback response
+            self.cache_repo.cache_response(
+                provider="rapidapi_hotels",
+                endpoint="locations_fallback",
+                params=fb_params,
+                response=fb_data,
+                ttl_seconds=self.cache_ttl * 24,
+            )
+
+            # Some variants return a list at top-level; others under "result"
+            fb_results = fb_data
+            if isinstance(fb_data, dict):
+                fb_results = fb_data.get("result", [])
+
+            if isinstance(fb_results, list) and fb_results:
+                return fb_results[0]
+
             return None
-            
+
         except httpx.HTTPError as e:
             logger.error(f"RapidAPI location search error for {search_query}: {e}")
             return None
