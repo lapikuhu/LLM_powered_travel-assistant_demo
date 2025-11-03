@@ -49,6 +49,8 @@ def create_app() -> FastAPI:
     
     # Mount static files
     app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
+    # Mount assets (images, favicons, etc.)
+    app.mount("/assets", StaticFiles(directory="app/web/assets"), name="assets")
     
     return app
 

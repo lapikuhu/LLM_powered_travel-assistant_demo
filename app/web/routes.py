@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -371,3 +371,9 @@ async def admin_dashboard(
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve the site favicon for default browser requests at /favicon.ico."""
+    return FileResponse("app/web/assets/imgs/favi/planet_icon.ico")
